@@ -50,3 +50,10 @@
   - fp-check 修复：Playwright ≥1.4x 对字符串只做表达式求值，evaluate 必须传真实函数引用（原字符串箭头函数返回函数对象序列化为 undefined）
 - `pnpm exec eslint src/main/fingerprint` → 0 错误；`prettier --check` → 全部合规（scripts/ 在 eslint ignore 列表，属 01 配置）
 - 追加用例：`FP_CHECK_COUNTRY=JP` → ja-JP + Asia/Tokyo 对齐链路 PASS
+
+## 复验记录（2026-09-07，同日复核）
+
+- 复跑全套验证：离线自检 21/21 PASS；`pnpm typecheck:node` 0 错误；eslint 0 错误
+- 修复 `scripts/fp-check.ts` 的 prettier 格式（此前仓库级 `prettier --check .` 对该文件告警；修复后 src/main/fingerprint + scripts/fp-check.ts 全部合规。仓库级告警仅剩各窗口的 md 文档，非本模块范围）
+- 浏览器端到端复跑 US/DE 双用例 PASS：同环境两次启动 UA/平台/并发/屏幕/WebGL/时区/语言全字段一致，且与持久化核心指纹逐字段一致；DE 用例 locale 一致性成立（de-DE + Europe/Berlin）
+- 澄清（避免复验困惑）：核心指纹的 UA 大版本/平台/硬件参数在**生成时**随机抽取，生成后随环境冻结不变——不同批次生成可能得到 Chrome/146 或 /147、Windows 或 macOS 平台；验收 3 判定的是"同环境多次启动核心字段一致"，与具体固定值无关

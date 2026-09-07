@@ -125,10 +125,13 @@ function offlineChecks(): void {
   expectThrow('T3 DAO patch 带 fingerprint 字段被断言拦截', () =>
     assertNoProtectedUpdate({ id: 'x', fingerprint: {} })
   )
-  check('T3 DAO patch 不带指纹字段时放行', (() => {
-    assertNoProtectedUpdate({ id: 'x', name: 'ok' })
-    return true
-  })())
+  check(
+    'T3 DAO patch 不带指纹字段时放行',
+    (() => {
+      assertNoProtectedUpdate({ id: 'x', name: 'ok' })
+      return true
+    })()
+  )
 
   // T4 国家差异
   check('T4 US→DE 触发变更', diffCountry('US', 'DE').changed)
@@ -261,12 +264,15 @@ function compareRuns(core: ReadonlyCoreFingerprint, runs: Metrics[]): void {
     check(`两次启动一致：${name}`, same, JSON.stringify([get(runs[0]), get(runs[1])]))
   }
   check('UA 与持久化核心指纹一致', runs[0].userAgent === core.userAgent)
-  check('屏幕与持久化核心指纹一致', deepEqual(runs[0].screen, {
-    width: core.screen.width,
-    height: core.screen.height,
-    colorDepth: core.screen.colorDepth,
-    pixelRatio: core.screen.pixelRatio
-  }))
+  check(
+    '屏幕与持久化核心指纹一致',
+    deepEqual(runs[0].screen, {
+      width: core.screen.width,
+      height: core.screen.height,
+      colorDepth: core.screen.colorDepth,
+      pixelRatio: core.screen.pixelRatio
+    })
+  )
   check('WebGL 与持久化核心指纹一致', deepEqual(runs[0].webgl, core.webgl))
   console.log('\n第一次启动表现值:')
   console.log(JSON.stringify(runs[0], null, 2))
@@ -289,7 +295,9 @@ async function browserChecks(): Promise<void> {
   const runs: Metrics[] = []
   for (const run of [1, 2]) {
     // 每次从磁盘重新读取并冻结（模拟 02 读取行 → freeze 的真实路径）
-    const core = freezeCoreFingerprint(JSON.parse(readFileSync(coreFile, 'utf8')) as CoreFingerprint)
+    const core = freezeCoreFingerprint(
+      JSON.parse(readFileSync(coreFile, 'utf8')) as CoreFingerprint
+    )
     console.log(`启动第 ${run} 次…`)
     runs.push(await launchOnce(executablePath, profileDir, core))
   }

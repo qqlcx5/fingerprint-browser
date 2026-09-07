@@ -78,12 +78,16 @@ async function runSmoke(): Promise<void> {
     `(async () => {
       const ping = await window.api.ping()
       const created = await window.api.envCreate({ name: 'smoke-env' })
+      const invalidProxy = await window.api.envCreate({
+        name: 'invalid-proxy',
+        proxyConfig: { type: 'ftp', host: '', port: 0 }
+      })
       const list1 = await window.api.envList()
       const del = created.ok ? await window.api.envDelete({ id: created.data.id }) : created
       const list2 = await window.api.envList()
       const status = await window.api.envStatus()
       const notices = await window.api.appNotices()
-      return { ping, created, list1, del, list2, status, notices }
+      return { ping, created, invalidProxy, list1, del, list2, status, notices }
     })()`
   )
   console.log('E2E_PING', JSON.stringify(res.ping))
@@ -96,6 +100,7 @@ async function runSmoke(): Promise<void> {
       list2Count: res.list2.ok ? res.list2.data.length : -1
     })
   )
+  console.log('E2E_PROXY_VALIDATION', JSON.stringify(res.invalidProxy))
   console.log('E2E_STATUS', JSON.stringify(res.status))
   console.log('E2E_NOTICES', JSON.stringify(res.notices))
   const pingOk = res.ping.ok && res.ping.data.pong === true && res.ping.data.sqlite === true
@@ -108,8 +113,9 @@ async function runSmoke(): Promise<void> {
     res.list2.data.length === 0 &&
     res.status.ok &&
     Object.values(res.status.data).every((s) => s === 'idle')
-  console.log('E2E_RESULT', pingOk && crudOk ? 'PASS' : 'FAIL')
-  app.exit(pingOk && crudOk ? 0 : 1)
+  const proxyValidationOk = !res.invalidProxy.ok && res.invalidProxy.error.code === 'VALIDATION'
+  console.log('E2E_RESULT', pingOk && crudOk && proxyValidationOk ? 'PASS' : 'FAIL')
+  app.exit(pingOk && crudOk && proxyValidationOk ? 0 : 1)
 }
 
 app.whenReady().then(() => {

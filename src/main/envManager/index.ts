@@ -26,7 +26,7 @@ import {
   type EnvRecord
 } from '../db'
 import { alignFieldsForCountry, generateCoreFingerprint } from '../fingerprint'
-import { testEgress } from '../proxy'
+import { testEgress, validateProxyConfig } from '../proxy'
 import { getStatus, getStatusMap, launchEnv, stopEnv } from '../launcher'
 import { drainNotices, pushNotice } from './notices'
 import { wipeAllData } from './wipe'
@@ -76,10 +76,14 @@ function registerEnvChannels(): void {
     const name = (input.name ?? '').trim()
     if (!name) fail('VALIDATION', '环境名称不能为空')
     const dao = getEnvDao()
+    const proxyConfig =
+      input.proxyConfig === undefined || input.proxyConfig === null
+        ? null
+        : validateProxyConfig(input.proxyConfig)
     let country: string | null = null
-    if (input.proxyConfig) {
+    if (proxyConfig) {
       try {
-        country = (await testEgress(input.proxyConfig)).country
+        country = (await testEgress(proxyConfig)).country
       } catch (e) {
         // T1 约定：测试失败允许保存，以直连基准生成指纹，错误码留给启动时再暴露
         getLogger().warn('envManager.create_proxy_test_failed', {
@@ -93,7 +97,7 @@ function registerEnvChannels(): void {
       remark: input.remark ?? '',
       fingerprint: generateCoreFingerprint(country),
       alignFields: alignFieldsForCountry(country),
-      proxyConfig: input.proxyConfig ?? null
+      proxyConfig
     })
     return toEnv(record)
   })
@@ -107,7 +111,10 @@ function registerEnvChannels(): void {
       changes.name = name
     }
     if (input.remark !== undefined) changes.remark = input.remark
-    if (input.proxyConfig !== undefined) changes.proxyConfig = input.proxyConfig
+    if (input.proxyConfig !== undefined) {
+      changes.proxyConfig =
+        input.proxyConfig === null ? null : validateProxyConfig(input.proxyConfig)
+    }
     const updated = getEnvDao().updateEnv(input.id, changes)
     if (!updated) fail('NOT_FOUND', `环境不存在: ${input.id}`)
     return toEnv(updated)

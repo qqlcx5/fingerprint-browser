@@ -6,6 +6,7 @@
 > 多窗口并行（同目录）时：本文件**只有你本人更新**，窗口 agent 只勾自己的模块 md，硬规则见 parallel-plan.md §2。
 > 2026-09-07 对抗式审查（对照需求文档 v1.1 逐条核对）：修补 16 处缺口——env:status 实现认领（07-T7）、应用退出钩子（06-T7）、滚动日志器（02-T6）、下载目录隔离落地、create 出口国家来源、app:wipeData（07-T8）等；阶段 0 已核实完成（01 全勾 + 冒烟通过）。需求↔任务追溯矩阵见 traceability.md。
 > 2026-09-07 二次审查（01 模块对抗式复核，验证记录全部复现）：契约增量 +3 通道（env:crashed 事件 / app:notices 拉取 / app:wipeData，types.ts+preload 已同步）；国家变更检测时机决策收敛到 env:start（07-T2）；EgressInfo all-or-nothing 口径记录于 traceability.md「显式契约决策记录」。
+> 2026-09-08 三次对抗式审查与修复：修正 Windows 孤儿清理路径、退出/清除数据遗漏 starting/stopping 环境、启动取消竞态、页面崩溃事件与 env:create/env:update 代理入站校验；`pnpm build` 和生产态 E2E CRUD/非法代理校验均 PASS。模块勾选仅表示代码任务已实现，验收标准仍以本文件里程碑和下列真实环境回归为准。
 
 ## 模块完成情况
 
@@ -37,6 +38,6 @@
 
 ## 当前进行中（每次开工更新，防止上下文丢失）
 
-- 当前状态：01–08 已完成；09 的 macOS 包/DMG/包内 E2E 已通过，Windows NSIS 与全量验收待执行
-- 下一个：在 Windows x64 执行 T2；随后按 09 附录 A 执行验收 1–9，并回写需求文档 IPC 表（env:get/align:confirm/app:notices/app:wipeData）
-- 阻塞项：真实浏览器启动、代理、10 并行、断网首启、Windows 安装卸载均需人工/目标平台验证
+- 当前状态：01–08 的代码任务已实现；生产态 E2E 已验证 SQLite、CRUD、状态/通知与非法代理拦截。09 的 macOS 目录包/DMG/包内 E2E 已通过；M1–M3 均未验收完成。
+- 下一个：先用真实 Chromium 复验 06 的启动取消、页面崩溃通知和 Windows 孤儿清理；随后在 Windows x64 执行 09-T2，再按 09 附录 A 执行验收 1–9。
+- 阻塞项：真实浏览器启动、代理、10 并行、断网首启、Windows 安装卸载均需人工/目标平台验证；运行中整个 Chromium 进程异常退出无法仅靠 Playwright `context.close` 区分于用户关窗，当前仅能可靠报告页面崩溃与启动期 context 异常关闭。

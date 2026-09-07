@@ -179,39 +179,49 @@ async function resolveChromium(): Promise<string> {
   )
 }
 
-/** 在注入后的页面里读取指纹表现值 */
-const READ_METRICS = `() => ({
-  userAgent: navigator.userAgent,
-  platform: navigator.platform,
-  hardwareConcurrency: navigator.hardwareConcurrency,
-  deviceMemory: navigator.deviceMemory,
-  screen: {
-    width: screen.width, height: screen.height,
-    colorDepth: screen.colorDepth, pixelRatio: window.devicePixelRatio
-  },
-  webgl: (() => {
-    const c = document.createElement('canvas')
-    const gl = c.getContext('webgl')
-    if (!gl) return null
-    const ext = gl.getExtension('WEBGL_debug_renderer_info')
-    return {
-      vendor: gl.getParameter(ext ? ext.UNMASKED_VENDOR_WEBGL : gl.VENDOR),
-      renderer: gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER)
-    }
-  })(),
-  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  language: navigator.language
-})`
-
+/**
+ * 在注入后的页面里读取指纹表现值。
+ * 注意：必须传真实函数引用（Playwright ≥1.4x 对字符串只做表达式求值，
+ * '() => {...}' 会返回函数对象，序列化为 undefined）。
+ */
 interface Metrics {
   userAgent: string
   platform: string
   hardwareConcurrency: number
-  deviceMemory: number
+  deviceMemory: number | null
   screen: { width: number; height: number; colorDepth: number; pixelRatio: number }
   webgl: { vendor: string; renderer: string } | null
   timezone: string
   language: string
+}
+
+function readMetrics(): Metrics {
+  const nav = navigator as unknown as Navigator & { deviceMemory?: number }
+  const c = document.createElement('canvas')
+  const gl = c.getContext('webgl')
+  let webgl: { vendor: string; renderer: string } | null = null
+  if (gl) {
+    const ext = gl.getExtension('WEBGL_debug_renderer_info')
+    webgl = {
+      vendor: String(gl.getParameter(ext ? ext.UNMASKED_VENDOR_WEBGL : gl.VENDOR)),
+      renderer: String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER))
+    }
+  }
+  return {
+    userAgent: navigator.userAgent,
+    platform: navigator.platform,
+    hardwareConcurrency: navigator.hardwareConcurrency,
+    deviceMemory: nav.deviceMemory ?? null,
+    screen: {
+      width: screen.width,
+      height: screen.height,
+      colorDepth: screen.colorDepth,
+      pixelRatio: window.devicePixelRatio
+    },
+    webgl,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    language: navigator.language
+  }
 }
 
 async function launchOnce(
@@ -229,7 +239,7 @@ async function launchOnce(
     await injectFingerprint(context, core)
     const page = await context.newPage()
     await page.goto('about:blank')
-    return (await page.evaluate(READ_METRICS)) as Metrics
+    return await page.evaluate(readMetrics)
   } finally {
     await context.close()
   }

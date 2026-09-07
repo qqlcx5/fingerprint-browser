@@ -4,7 +4,8 @@ import { createRequire } from 'module'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/types'
 import { defineIpc, registerIpc } from './ipc'
-import { setupStorage, closeStorage } from './db'
+import { setupStorage, closeStorage, getEnvDao } from './db'
+import { initStatuses, cleanupOrphanChromium, stopAllRunning, getRunningIds } from './launcher'
 import { registerKernelIpc } from './kernel'
 import { registerProxyIpc } from './proxy'
 import icon from '../../resources/icon.png?asset'
@@ -111,13 +112,34 @@ app.whenReady().then(() => {
     // §9：库损坏已自动重建，渲染层应提示“环境列表为空属预期”（08-T8）
     console.warn('[storage] 数据库已重置，环境列表为空属预期')
   }
+  // 运行状态初始化（§5：不落库，启动时全部 idle）+ 孤儿 Chromium 清理（06-T1/T5）
+  initStatuses(
+    getEnvDao()
+      .listEnvs()
+      .map((r) => r.id)
+  )
+  void cleanupOrphanChromium()
   registerKernelIpc()
   registerProxyIpc()
   registerIpc()
 
-  // 退出前落盘（06 实现后：先逐环境优雅停止，再 closeStorage）
-  app.on('before-quit', () => {
-    closeStorage()
+  // 退出前先逐环境优雅停止（06-T7），再落盘（05-WAL checkpoint）
+  let quitting = false
+  app.on('before-quit', (e) => {
+    if (quitting) {
+      closeStorage()
+      return
+    }
+    if (getRunningIds().length === 0) {
+      closeStorage()
+      return
+    }
+    e.preventDefault()
+    quitting = true
+    void stopAllRunning().finally(() => {
+      closeStorage()
+      app.quit()
+    })
   })
 
   if (process.env['E2E_SMOKE'] === '1') {

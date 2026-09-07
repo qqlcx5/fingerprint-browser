@@ -35,7 +35,7 @@
 
 1. **SOCKS5 认证 × Chromium 上游限制**：Chromium `--proxy-server` 不支持 SOCKS5 用户名/密码认证，Playwright 的 `proxy.username/password` 仅对 http/https 代理生效。`toPlaywrightProxy` 保持忠实映射；若 M2 验收要求 SOCKS5 认证在真实内核内生效，需 06-launcher 增加"本地中继"方案（**需要协调**）
 2. 双源均成功但国家字段不一致时取首选源（不做仲裁，出口漂移以启动对齐流程为准）
-3. 依赖已冻结，未新增包：隧道协议为手写实现（含 mock E2E 覆盖）；真实网络表现待 M2 联调验证
+3. 依赖已冻结，未新增包：隧道协议为手写实现（含 mock E2E 覆盖）
 
 ## 验证记录（2026-09-07）
 
@@ -45,6 +45,16 @@
   - 校验：合法三类型、port 越界/非数字、host 非法、认证不成对、非对象、空字符串认证归一化
   - 出口测试：http 认证代理成功取 IP/国家/延迟、407→PROXY_AUTH、502→PROXY_DNS、停滞→PROXY_TIMEOUT、类型选错→PROXY_PROTOCOL、socks5 成功/密码错/未填认证、双源回落、双源全失败汇总、代理拒连
   - 映射：含认证、IPv6 补括号、无认证省略字段
+
+## 验证记录·补充（2026-09-07，真实网络）
+
+在首轮 21 项 mock E2E 基础上追加 4 项，**全部通过（4 passed, 0 failed）**；离线套件回归 **21 passed, 0 failed**；`pnpm typecheck` 全仓复验无错误。
+
+- 协议边界（离线）：chunked 响应解码 ✓；HTTP/1.0 无 Content-Length（读连接关闭定界）✓
+- 真实网络（本地代理转发到真实 ipinfo.io / ipwho.is，https 目标）：
+  - http 型 CONNECT 代理 → 真实 TLS 握手 + JSON 解析 ✓（出口 60.249.27.69 TW，约 400ms）
+  - socks5 型代理 → ATYP=0x03 域名请求路径端到端 ✓（首次覆盖；此前离线用例均走 IPv4 字面量）
+- 排障记录：真实网络首轮失败，定位为测试 mock 的 SOCKS 请求解析 off-by-one（ATYP=3 时端口偏移应含长度字节），**客户端实现无缺陷**（`socksAddress` 编码 RFC 正确）
 
 ## 接线（集成阶段）
 

@@ -42,6 +42,11 @@
   - T3 只读：深冻结生效（strict 改写抛 TypeError）；DAO patch 带 fingerprint 被断言拦截、不带放行
   - T4 差异：US→DE 变更 / DE→DE 不变 / null→US 变更 / 测连无国家不触发 / 对齐字段反查国家
   - T5 注入确定性：同核心指纹重建注入指纹逐字节一致（2469B）；启动选项含时区/UA/viewport
-- 浏览器端到端（验收 3 完整跑通）：本机无 Chromium 二进制（ms-playwright 缓存只有 ffmpeg），待 `pnpm exec playwright-core install chromium` 或 03 内核就绪后执行 `NODE_PATH="$PWD/node_modules" node $TMP/fp-check.cjs`（脚本头部有完整命令）；脚本对二进制缺失有明确报错与两种解决指引（已验证该分支）
+- 浏览器端到端（验收 3）**PASS**（2026-09-07，Chromium Headless Shell 153.0.8010.12，`playwright-core install chromium` 下载至用户缓存，未动项目依赖）：
+  - DE 用例：两次启动 UA/平台/并发数/屏幕/WebGL/时区/语言完全一致，且与持久化核心指纹逐字段一致（UA Chrome/146 + Europe/Berlin + de-DE）
+  - US 用例：同上（Windows UA + Win32 + 1536x864@1.25 + Intel HD 620 + America/New_York + en-US）
+  - 注入生效证据：未注入时 UA 为 HeadlessChrome/153，注入后变为核心指纹的 Chrome/146
+  - 已知边界：Headless Shell 153 已移除 `navigator.deviceMemory` API（`in navigator === false`），读出 null——非注入缺陷，站点统一读不到，两次启动一致；正式内核若保留该 API，injector 会覆盖为核心指纹值
+  - fp-check 修复：Playwright ≥1.4x 对字符串只做表达式求值，evaluate 必须传真实函数引用（原字符串箭头函数返回函数对象序列化为 undefined）
 - `pnpm exec eslint src/main/fingerprint` → 0 错误；`prettier --check` → 全部合规（scripts/ 在 eslint ignore 列表，属 01 配置）
 - 追加用例：`FP_CHECK_COUNTRY=JP` → ja-JP + Asia/Tokyo 对齐链路 PASS

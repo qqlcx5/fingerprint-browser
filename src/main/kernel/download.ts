@@ -23,20 +23,25 @@ import {
 import { kernelError, type KernelError } from './errors'
 import { extractZip } from './unzip'
 
-/** 镜像优先级：npmmirror（本仓 .npmrc 同源）→ 官方 ESRP/存储桶；环境变量覆盖与 playwright 语义一致 */
+/**
+ * 镜像优先级：npmmirror（本仓 .npmrc 同源，已核实托管 builds/cft）→ 官方 CDN → ESRP。
+ * 与 playwright 1.63 语义一致：环境变量命中则只用自定义源。
+ * 注：官方对 CFT 构建默认仅列 cdn.playwright.dev，dbazure/prss 为兜底（307/400 会被轮换跳过）。
+ */
 function mirrorHosts(): string[] {
   const custom =
     process.env.PLAYWRIGHT_CHROMIUM_DOWNLOAD_HOST || process.env.PLAYWRIGHT_DOWNLOAD_HOST
   if (custom) return [custom]
   return [
     'https://cdn.npmmirror.com/binaries/playwright',
+    'https://cdn.playwright.dev',
     'https://cdn.playwright.dev/dbazure/download/playwright',
-    'https://playwright.download.prss.microsoft.com/dbazure/download/playwright',
-    'https://cdn.playwright.dev'
+    'https://playwright.download.prss.microsoft.com/dbazure/download/playwright'
   ]
 }
 
-const MAX_ATTEMPTS = 3
+/** 一轮 = 全部镜像各试一次；网络整体故障时最多两轮 */
+const MAX_ROUNDS = 2
 /** 空闲看门狗：超过该时长未收到任何字节视为连接僵死，中断并续传 */
 const IDLE_TIMEOUT_MS = 30_000
 
@@ -129,19 +134,20 @@ async function downloadWithResume(
   const urls = mirrorHosts().map((h) => `${h.replace(/\/+$/, '')}/${rel}`)
   let lastErr: unknown = new Error('未发起下载')
   let lastUrl = urls[0]
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const url = urls[(attempt - 1) % urls.length]
-    lastUrl = url
-    try {
-      if (await fetchToFile(url, partPath, cb.onProgress)) return
-    } catch (e) {
-      lastErr = e instanceof InterruptedDownload ? (e.reason ?? e) : e
+  for (let round = 0; round < MAX_ROUNDS; round++) {
+    for (const url of urls) {
+      lastUrl = url
+      try {
+        if (await fetchToFile(url, partPath, cb.onProgress)) return
+      } catch (e) {
+        lastErr = e instanceof InterruptedDownload ? (e.reason ?? e) : e
+      }
     }
   }
   const detail = lastErr instanceof Error ? lastErr.message : String(lastErr)
   throw kernelError(
     'KERNEL_DOWNLOAD_FAILED',
-    `内核下载失败（已自动重试 ${MAX_ATTEMPTS} 次，最后镜像 ${lastUrl}）：${detail}。请检查网络后重试`
+    `内核下载失败（${urls.length} 个镜像 × ${MAX_ROUNDS} 轮均失败，最后镜像 ${lastUrl}）：${detail}。请检查网络后重试`
   )
 }
 

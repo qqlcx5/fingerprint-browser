@@ -4,6 +4,9 @@ import { createRequire } from 'module'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/types'
 import { defineIpc, registerIpc } from './ipc'
+import { setupStorage, closeStorage } from './db'
+import { registerKernelIpc } from './kernel'
+import { registerProxyIpc } from './proxy'
 import icon from '../../resources/icon.png?asset'
 
 const nodeRequire = createRequire(__filename)
@@ -102,7 +105,20 @@ app.whenReady().then(() => {
   }))
 
   // 统一接线：已定义通道走处理器，未定义通道返回 NOT_IMPLEMENTED 占位
+  // 存储层需在 registerIpc() 前就绪（db/index.ts 约定）
+  const storage = setupStorage()
+  if (storage.reset) {
+    // §9：库损坏已自动重建，渲染层应提示“环境列表为空属预期”（08-T8）
+    console.warn('[storage] 数据库已重置，环境列表为空属预期')
+  }
+  registerKernelIpc()
+  registerProxyIpc()
   registerIpc()
+
+  // 退出前落盘（06 实现后：先逐环境优雅停止，再 closeStorage）
+  app.on('before-quit', () => {
+    closeStorage()
+  })
 
   if (process.env['E2E_SMOKE'] === '1') {
     void runSmoke()

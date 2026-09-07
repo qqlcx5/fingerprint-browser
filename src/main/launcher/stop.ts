@@ -5,8 +5,8 @@
 import type { BrowserContext } from 'playwright-core'
 import { getLogger } from '../db'
 import { killByProfileDir } from './orphan'
-import { setStatus } from './status'
-import { getContext } from './launch'
+import { getContext, cancelLaunch } from './launch'
+import { getActiveEnvIds, setStatus } from './status'
 
 const STOP_TIMEOUT_MS = 5_000
 
@@ -15,6 +15,8 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | 'timeout'> {
 }
 
 export async function stopEnv(id: string): Promise<void> {
+  // 启动中的内核下载/代理测连不能直接中断；取消令牌确保其后续不会再创建 Chromium。
+  cancelLaunch(id)
   const context: BrowserContext | undefined = getContext(id)
   if (!context) {
     setStatus(id, 'idle')
@@ -40,9 +42,7 @@ export async function stopEnv(id: string): Promise<void> {
   }
 }
 
-/** 应用退出钩子（06-T7）：逐个优雅停止全部运行中环境，单个超时强杀 */
+/** 应用退出与清空数据：逐个停止全部活动环境（含 starting / stopping）。 */
 export async function stopAllRunning(): Promise<void> {
-  const { getRunningIds } = await import('./status')
-  const ids = getRunningIds()
-  await Promise.all(ids.map((id) => stopEnv(id)))
+  await Promise.all(getActiveEnvIds().map((id) => stopEnv(id)))
 }

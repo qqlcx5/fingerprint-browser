@@ -6,7 +6,7 @@
  *   before-quit：stopAllRunning() → closeStorage()
  * env:start / env:stop / env:status IPC 由 07-env-manager 编排（launchEnv/stopEnv/getStatusMap）。
  */
-export { initStatuses, getStatus, getStatusMap, getRunningIds, setStatus } from './status'
-export { launchEnv, getContext, type LaunchResult } from './launch'
+export { initStatuses, getStatus, getStatusMap, getActiveEnvIds, setStatus } from './status'
+export { launchEnv, getContext, cancelLaunch, type LaunchResult } from './launch'
 export { stopEnv, stopAllRunning } from './stop'
 export { cleanupOrphanChromium, killByProfileDir } from './orphan'

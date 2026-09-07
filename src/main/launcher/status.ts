@@ -25,8 +25,8 @@ export function getStatusMap(): EnvStatusMap {
   return Object.fromEntries(statuses)
 }
 
-export function getRunningIds(): string[] {
-  return [...statuses.entries()].filter(([, s]) => s === 'running').map(([id]) => id)
+export function getActiveEnvIds(): string[] {
+  return [...statuses.entries()].filter(([, s]) => s !== 'idle').map(([id]) => id)
 }
 
 /** 变更状态并广播；状态无变化时不重复推送 */

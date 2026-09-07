@@ -7,6 +7,7 @@
  */
 import { execFile } from 'child_process'
 import { app } from 'electron'
+import { dirname } from 'path'
 import { getLogger } from '../db'
 import { envProfileDir } from '../../shared/paths'
 
@@ -65,7 +66,7 @@ function kill(pid: number): Promise<void> {
 
 /** 启动时清理：杀掉所有占用本应用 envs/{id}/profile 的孤儿进程 */
 export async function cleanupOrphanChromium(): Promise<number> {
-  const envsRoot = envProfileDir('').split('/profile')[0] // userData/envs
+  const envsRoot = dirname(envProfileDir('')) // userData/envs（Windows 与 POSIX 均正确）
   const rows = await listProcesses()
   let killed = 0
   for (const row of rows) {

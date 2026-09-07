@@ -36,8 +36,8 @@ nsis:
   # §8 卸载行为：卸载不删除 userData（保留登录态）；"彻底清除数据"走 app:wipeData 入口
   deleteAppDataOnUninstall: false
 mac:
-  # TODO(签名/公证占位，T3)：无 Apple Developer 证书。identity: null 时不做正式签名，
-  # electron-builder 对 arm64 自动 ad-hoc 签名保证本机可运行；分发需自行处理 Gatekeeper 提示。
+  # TODO(签名/公证占位，T3)：无 Apple Developer 证书。identity: null 会让 electron-builder 跳过代码签名，
+  # 当前产物仅限本机/受控内测；外部分发前必须配置 Developer ID identity 并启用 notarize。
   # 取得证书后：填 identity（或 CSC_NAME 环境变量）、notarize: true + APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID。
   identity: null
   notarize: false

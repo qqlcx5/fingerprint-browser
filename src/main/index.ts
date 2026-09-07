@@ -6,7 +6,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/types'
 import { defineIpc, registerIpc } from './ipc'
 import { setupStorage, closeStorage, getEnvDao } from './db'
-import { initStatuses, cleanupOrphanChromium, stopAllRunning, getRunningIds } from './launcher'
+import { getActiveEnvIds, initStatuses, cleanupOrphanChromium, stopAllRunning } from './launcher'
 import { registerEnvManagerIpc, pushNotice } from './envManager'
 import { registerKernelIpc } from './kernel'
 import { registerProxyIpc } from './proxy'
@@ -165,7 +165,7 @@ app.whenReady().then(() => {
       closeStorage()
       return
     }
-    if (getRunningIds().length === 0) {
+    if (getActiveEnvIds().length === 0) {
       closeStorage()
       return
     }

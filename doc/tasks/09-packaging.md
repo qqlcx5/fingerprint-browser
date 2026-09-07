@@ -16,7 +16,7 @@
 
 | 文件                              | 内容                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `electron-builder.yml`            | appId `com.fingerprint-browser.app`（与主进程 `setAppUserModelId` 一致）；productName `Fingerprint Browser`；asar 开启 + `resources/**` 解包；win nsis 向导式（license 页 = `build/license.txt`、可改安装目录、`deleteAppDataOnUninstall: false` 保留 userData）；mac dmg（`identity: null` ad-hoc、`notarize: false`、category、entitlements 沿用 `build/entitlements.mac.plist`）；linux 保留 target（不在 M3 验收范围）；`npmRebuild: false`（postinstall 已按 Electron ABI 重编，包内用 `scripts/check-native.cjs` 验证）；publish 为 generic 占位（P2 自动更新）；Win/Mac 代码签名均留 TODO 注释 |
+| `electron-builder.yml`            | appId `com.fingerprint-browser.app`（与主进程 `setAppUserModelId` 一致）；productName `Fingerprint Browser`；asar 开启 + `resources/**` 解包；win nsis 向导式（license 页 = `build/license.txt`、可改安装目录、`deleteAppDataOnUninstall: false` 保留 userData）；mac dmg（`identity: null` 时跳过签名、`notarize: false`、category、entitlements 沿用 `build/entitlements.mac.plist`）；linux 保留 target（不在 M3 验收范围）；`npmRebuild: false`（postinstall 已按 Electron ABI 重编，包内用 `scripts/check-native.cjs` 验证）；publish 为 generic 占位（P2 自动更新）；Win/Mac 代码签名均留 TODO 注释 |
 | `build/license.txt`               | 安装协议（NSIS 许可页展示）：用途限制（合法多账号运营）、明确"不提供也不承诺防封号/绕过风控"、隐私（数据仅本地）、开源许可指引、免责声明                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `build/third-party-licenses.md`   | §3 组件许可索引表（Electron/Chromium/playwright-core/指纹双件套/better-sqlite3 等）+ 发布前用 `electron-builder --licenses` 重新生成完整清单的说明                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `resources/docs/user-guide.zh.md` | 随包用户文档：快速上手、两段式指纹、数据与隐私（路径表/卸载保留/清除入口/safeStorage 降级）、内核升级 UA 滞后窗口说明义务、§10 四条已知边界、故障排查表                                                                                                                                                                                                                                                                                                                                                                                                                                               |
@@ -25,7 +25,7 @@
 
 1. **productName 与 userData 路径**：打包后 `app.getName()` 取 productName（`Fingerprint Browser`），与开发态（`fingerprint-browser`）目录分离，属预期隔离；`dev-app-update.yml` 的 updaterCacheDirName 不受影响。
 2. **安装协议进安装器而非仅文档**：§1 要求"安装协议注明用途限制"，NSIS license 页是装机唯一强制展示点；mac 无对应机制，靠随包文档 + 应用内首启提示（08-ui 范畴）补齐。
-3. **无证书先发内测**：Win 不签名（SmartScreen 提示可接受）；Mac ad-hoc 签名保证 arm64 本机可运行，分发时用户需手动放行 Gatekeeper——均已在 yml 注释记录取证后补法。
+3. **无证书仅作受控内测**：Win 与 Mac 均不签名；Mac 的 `identity: null` 会使 electron-builder 跳过签名，受控机器可手动放行，外部分发前必须补 Developer ID 签名与公证——补法已写入 yml 注释。
 
 ## 验证记录
 
@@ -84,7 +84,7 @@ pnpm build:mac && hdiutil attach dist/fingerprint-browser-*.dmg          # T3：
 ### 附录 C：内核升级发布流程（§3 版本锁定策略）
 
 1. 升级 `package.json` 中 `playwright-core` 版本（单一事实源，Chromium revision 与之一一对应）；
-2. `pnpm install` 后运行 `pnpm exec ts-node scripts/fp-check.ts` 回归指纹注入；
+2. 按 `scripts/fp-check.ts` 文件头记录的 esbuild 编译命令执行 `FP_CHECK_OFFLINE=1` 离线回归，再执行不带该环境变量的浏览器端完整回归；
 3. 跑附录 A 全量（至少 1/2/3/6/7）；
 4. 发布说明中必须写明：旧环境 UA 版本号与新内核存在不一致窗口（§10 第 4 条）；
 5. 版本号 + tag + 产物归档，更新 `build/third-party-licenses.md` 索引表。

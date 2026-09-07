@@ -1,10 +1,23 @@
 <script setup lang="ts">
-import { Pencil, Play, Plus, ShieldAlert, Square, Trash2 } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import {
+  FileDown,
+  FileText,
+  FileUp,
+  Pencil,
+  Play,
+  Plus,
+  Power,
+  ShieldAlert,
+  SlidersHorizontal,
+  Square,
+  Trash2
+} from '@lucide/vue'
+import { computed, onMounted, ref } from 'vue'
 import { useEnvs } from '../composables/useEnvs'
 import { errorText, pushToast, unwrap } from '../lib/toast'
 import type { CountryChangeInfo, Env, EnvSummary } from '@shared/types'
 import StatusBadge from '../components/StatusBadge.vue'
+import FingerprintModal from '../components/FingerprintModal.vue'
 import EnvFormModal from '../components/EnvFormModal.vue'
 import CountryChangeModal from '../components/CountryChangeModal.vue'
 import { Button } from '../components/ui/button'
@@ -22,12 +35,16 @@ const {
 // 弹窗状态
 const showForm = ref(false)
 const editing = ref<Env | null>(null)
+const fingerprinting = ref<Env | null>(null)
 const deleting = ref<EnvSummary | null>(null)
 const countryChange = ref<CountryChangeInfo | null>(null)
 const busyId = ref<string | null>(null)
 const query = ref('')
 const groupFilter = ref('')
 const selectedIds = ref<string[]>([])
+const showLogs = ref(false)
+const logLines = ref<string[]>([])
+const startupEnabled = ref(false)
 
 const groups = computed(() =>
   [...new Set(rows.value.map((row) => row.group).filter(Boolean))].sort((a, b) =>
@@ -49,6 +66,21 @@ const allVisibleSelected = computed(
     filteredRows.value.every((row) => selectedIds.value.includes(row.id))
 )
 
+onMounted(async () => {
+  const res = await window.api.appStartupGet()
+  if (res.ok) startupEnabled.value = res.data.enabled
+})
+
+async function toggleStartup(): Promise<void> {
+  const res = await window.api.appStartupSet({ enabled: !startupEnabled.value })
+  if (!res.ok) {
+    pushToast('error', errorText(res.error))
+    return
+  }
+  startupEnabled.value = res.data.enabled
+  pushToast('success', startupEnabled.value ? '已开启开机启动' : '已关闭开机启动')
+}
+
 function fmtTime(ts: number | null): string {
   if (!ts) return '从未启动'
   return new Date(ts).toLocaleString()
@@ -66,6 +98,11 @@ async function openEdit(env: EnvSummary): Promise<void> {
     editing.value = detail
     showForm.value = true
   }
+}
+
+async function openFingerprint(env: EnvSummary): Promise<void> {
+  const detail = await unwrap(window.api.envGet({ id: env.id }))
+  if (detail) fingerprinting.value = detail
 }
 
 async function onStart(env: EnvSummary): Promise<void> {
@@ -112,6 +149,28 @@ function toggleAllVisible(): void {
     : [...new Set([...selectedIds.value, ...filteredRows.value.map((row) => row.id)])]
 }
 
+async function transfer(kind: 'export' | 'import'): Promise<void> {
+  const res = kind === 'export' ? await window.api.envExport() : await window.api.envImport()
+  if (!res.ok) {
+    pushToast('error', errorText(res.error))
+    return
+  }
+  if (res.data.path) {
+    pushToast('success', `${kind === 'export' ? '已导出' : '已导入'} ${res.data.count} 个环境`)
+  }
+  if (kind === 'import' && res.data.count) await refresh()
+}
+
+async function openLogs(): Promise<void> {
+  const res = await window.api.appLogs()
+  if (!res.ok) {
+    pushToast('error', errorText(res.error))
+    return
+  }
+  logLines.value = res.data.lines
+  showLogs.value = true
+}
+
 async function deleteSelected(): Promise<void> {
   const ids = [...selectedIds.value]
   for (const id of ids) {
@@ -135,6 +194,43 @@ async function deleteSelected(): Promise<void> {
         <p class="page__sub">{{ rows.length }} 个环境</p>
       </div>
       <div class="page__actions">
+        <Button
+          variant="outline"
+          size="icon-xs"
+          :title="startupEnabled ? '关闭开机启动' : '开启开机启动'"
+          :aria-label="startupEnabled ? '关闭开机启动' : '开启开机启动'"
+          :class="startupEnabled ? 'startup-on' : ''"
+          @click="toggleStartup"
+        >
+          <Power aria-hidden="true" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-xs"
+          title="查看日志"
+          aria-label="查看日志"
+          @click="openLogs"
+        >
+          <FileText aria-hidden="true" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-xs"
+          title="导入环境配置"
+          aria-label="导入环境配置"
+          @click="transfer('import')"
+        >
+          <FileUp aria-hidden="true" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-xs"
+          title="导出环境配置"
+          aria-label="导出环境配置"
+          @click="transfer('export')"
+        >
+          <FileDown aria-hidden="true" />
+        </Button>
         <Button
           variant="outline"
           size="sm"
@@ -255,6 +351,16 @@ async function deleteSelected(): Promise<void> {
                   variant="ghost"
                   size="icon-xs"
                   :disabled="e.status !== 'idle'"
+                  :aria-label="`编辑核心指纹：${e.name}`"
+                  :title="`编辑核心指纹：${e.name}`"
+                  @click="openFingerprint(e)"
+                >
+                  <SlidersHorizontal aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  :disabled="e.status !== 'idle'"
                   :aria-label="`删除环境：${e.name}`"
                   :title="`删除环境：${e.name}`"
                   class="delete-action"
@@ -269,6 +375,21 @@ async function deleteSelected(): Promise<void> {
       </table>
     </div>
 
+    <Modal
+      v-if="showLogs"
+      title="运行日志"
+      confirm-text="关闭"
+      @confirm="showLogs = false"
+      @cancel="showLogs = false"
+    >
+      <pre class="logs">{{ logLines.join('\n') || '暂无日志' }}</pre>
+    </Modal>
+    <FingerprintModal
+      v-if="fingerprinting"
+      :env="fingerprinting"
+      @close="fingerprinting = null"
+      @saved="refresh"
+    />
     <EnvFormModal v-if="showForm" :env="editing" @close="showForm = false" @saved="refresh" />
     <CountryChangeModal v-if="countryChange" :info="countryChange" @done="countryChange = null" />
     <Modal
@@ -465,6 +586,27 @@ h1 {
   margin: 0;
   color: #1f2937;
   font-weight: 600;
+}
+.startup-on {
+  border-color: #16a34a;
+  color: #15803d;
+}
+.logs {
+  max-height: 420px;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #111827;
+  padding: 12px;
+  color: #d1d5db;
+  font:
+    12px/1.5 ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .muted {
   color: #9ca3af;

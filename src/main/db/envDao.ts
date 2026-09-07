@@ -72,6 +72,7 @@ export interface EnvDao {
   listEnvs(): EnvRecord[]
   /** 返回更新后记录；id 不存在返回 null */
   updateEnv(id: string, changes: EnvChanges): EnvRecord | null
+  updateFingerprint(id: string, fingerprint: ReadonlyCoreFingerprint): EnvRecord | null
   /** 返回记录是否真的被删除 */
   deleteEnv(id: string): boolean
 }
@@ -177,7 +178,16 @@ export function createEnvDao(db: Database.Database): EnvDao {
     return deleteById.run(id).changes > 0
   }
 
-  return { createEnv, getEnv, listEnvs, updateEnv, deleteEnv }
+  function updateFingerprint(id: string, fingerprint: ReadonlyCoreFingerprint): EnvRecord | null {
+    db.prepare('UPDATE environments SET fingerprint = ?, updated_at = ? WHERE id = ?').run(
+      JSON.stringify(fingerprint),
+      Date.now(),
+      id
+    )
+    return getEnv(id)
+  }
+
+  return { createEnv, getEnv, listEnvs, updateEnv, updateFingerprint, deleteEnv }
 }
 
 function sealProxy(config: ProxyConfig): StoredProxyConfig {

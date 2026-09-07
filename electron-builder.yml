@@ -24,7 +24,8 @@ win:
   target:
     - nsis
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  # ${arch} 区分 x64 / arm64 产物，避免双架构发布时同名冲突
+  artifactName: ${name}-${version}-${arch}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always

@@ -17,6 +17,7 @@ import type {
   EnvCreateInput,
   EnvSummary,
   EnvUpdateInput,
+  FingerprintUpdateInput,
   IdInput,
   StartupNotice
 } from '../../shared/types'
@@ -128,6 +129,35 @@ function registerEnvChannels(): void {
     return toEnv(updated)
   })
 
+  defineIpc<FingerprintUpdateInput, Env>(IPC.envUpdateFingerprint, (input) => {
+    if (getStatus(input.id) !== 'idle') fail('ENV_RUNNING', '环境运行中，不能修改核心指纹')
+    const fingerprint = input.fingerprint
+    if (
+      !fingerprint ||
+      !/Chrome\/\d+/.test(fingerprint.userAgent) ||
+      !fingerprint.platform ||
+      !Number.isInteger(fingerprint.hardwareConcurrency) ||
+      fingerprint.hardwareConcurrency < 1 ||
+      fingerprint.hardwareConcurrency > 128 ||
+      !Number.isFinite(fingerprint.deviceMemory) ||
+      fingerprint.deviceMemory < 1 ||
+      fingerprint.deviceMemory > 128 ||
+      fingerprint.screen.width < 600 ||
+      fingerprint.screen.height < 600 ||
+      fingerprint.screen.width > 10_000 ||
+      fingerprint.screen.height > 10_000 ||
+      !fingerprint.webgl.vendor ||
+      !fingerprint.webgl.renderer ||
+      !/^[a-z]{2,3}-[A-Z]{2}$/.test(fingerprint.locale)
+    ) {
+      fail('VALIDATION', '核心指纹字段不合法')
+    }
+    const updated = getEnvDao().updateFingerprint(input.id, fingerprint)
+    if (!updated) fail('NOT_FOUND', `环境不存在: ${input.id}`)
+    getLogger().info('envManager.fingerprint_updated', { id: input.id })
+    return toEnv(updated)
+  })
+
   // T3 align:confirm：确认 → 仅更新对齐字段（核心指纹只读由 DAO 断言兜底）；取消 → 保留
   defineIpc<AlignConfirmInput, { id: string }>(IPC.alignConfirm, (input) => {
     const country = pendingAlign.get(input.id)
@@ -180,10 +210,7 @@ function registerAppChannels(): void {
   defineIpc(IPC.envImport, () => importEnvs())
   defineIpc(IPC.appLogs, () => {
     try {
-      const lines = readFileSync(join(logsDir(), 'main.log'), 'utf8')
-        .trim()
-        .split('\n')
-        .slice(-300)
+      const lines = readFileSync(join(logsDir(), 'main.log'), 'utf8').trim().split('\n').slice(-300)
       return { lines }
     } catch {
       return { lines: [] }

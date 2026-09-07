@@ -1,4 +1,4 @@
-import { app, safeStorage, shell, BrowserWindow } from 'electron'
+import { app, safeStorage, shell, BrowserWindow, Menu, Tray } from 'electron'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { createRequire } from 'module'
@@ -19,6 +19,9 @@ import { registerProxyIpc } from './proxy'
 import icon from '../../resources/icon.png?asset'
 
 const nodeRequire = createRequire(__filename)
+let mainWindow: BrowserWindow | null = null
+let tray: Tray | null = null
+let isQuitting = false
 
 /** 骨架自检：better-sqlite3 原生模块在 Electron ABI 下是否可用（01-T6） */
 function sqliteAvailable(): boolean {
@@ -32,7 +35,7 @@ function sqliteAvailable(): boolean {
 
 function createWindow(): void {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
     show: false,
@@ -47,7 +50,14 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    mainWindow?.show()
+  })
+
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault()
+      mainWindow?.hide()
+    }
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -64,7 +74,29 @@ function createWindow(): void {
   }
 }
 
-// This method will be called when Electron has finished
+function createTray(): void {
+  tray = new Tray(icon)
+  tray.setToolTip('Fingerprint Browser')
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      {
+        label: '显示主窗口',
+        click: () => {
+          mainWindow?.show()
+          mainWindow?.focus()
+        }
+      },
+      {
+        label: '退出',
+        click: () => {
+          isQuitting = true
+          app.quit()
+        }
+      }
+    ])
+  )
+  tray.on('click', () => mainWindow?.show())
+}
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 /** E2E 冒烟模式：E2E_SMOKE=1 时无头自检 IPC 全链路后退出（CI/打包验收用） */
@@ -260,7 +292,8 @@ async function runSmoke(): Promise<void> {
       (await context.cookies('https://example.com')).some(
         (cookie) => cookie.name === 'fp_restart' && cookie.value === 'persisted'
       )
-    if (id) await win.webContents.executeJavaScript(`window.api.envStop({ id: ${JSON.stringify(id)} })`)
+    if (id)
+      await win.webContents.executeJavaScript(`window.api.envStop({ id: ${JSON.stringify(id)} })`)
     persistenceOk = !!id && cookiePersisted
     console.log('E2E_PERSIST_VERIFY', JSON.stringify({ id, cookiePersisted }))
   }
@@ -334,12 +367,26 @@ async function runSmoke(): Promise<void> {
   const proxyValidationOk = !res.invalidProxy.ok && res.invalidProxy.error.code === 'VALIDATION'
   console.log(
     'E2E_RESULT',
-    pingOk && crudOk && proxyValidationOk && kernelFailureOk && runtimeOk && persistenceOk && wipeOk && crashOk
+    pingOk &&
+      crudOk &&
+      proxyValidationOk &&
+      kernelFailureOk &&
+      runtimeOk &&
+      persistenceOk &&
+      wipeOk &&
+      crashOk
       ? 'PASS'
       : 'FAIL'
   )
   app.exit(
-    pingOk && crudOk && proxyValidationOk && kernelFailureOk && runtimeOk && persistenceOk && wipeOk && crashOk
+    pingOk &&
+      crudOk &&
+      proxyValidationOk &&
+      kernelFailureOk &&
+      runtimeOk &&
+      persistenceOk &&
+      wipeOk &&
+      crashOk
       ? 0
       : 1
   )
@@ -363,6 +410,13 @@ app.whenReady().then(() => {
     arch: process.arch,
     sqlite: sqliteAvailable()
   }))
+  defineIpc(IPC.appStartupGet, () => ({ enabled: app.getLoginItemSettings().openAtLogin }))
+  defineIpc<{ enabled: boolean }, { enabled: boolean }>(IPC.appStartupSet, (input) => {
+    if (typeof input?.enabled !== 'boolean') throw new Error('开机启动设置无效')
+    if (process.platform === 'linux') return { enabled: false }
+    app.setLoginItemSettings({ openAtLogin: input.enabled })
+    return { enabled: app.getLoginItemSettings().openAtLogin }
+  })
 
   // 统一接线：已定义通道走处理器，未定义通道返回 NOT_IMPLEMENTED 占位
   // 存储层需在 registerIpc() 前就绪（db/index.ts 约定）
@@ -398,15 +452,18 @@ app.whenReady().then(() => {
   let quitting = false
   app.on('before-quit', (e) => {
     if (quitting) {
+      isQuitting = true
       closeStorage()
       return
     }
     if (getActiveEnvIds().length === 0) {
+      isQuitting = true
       closeStorage()
       return
     }
     e.preventDefault()
     quitting = true
+    isQuitting = true
     void stopAllRunning().finally(() => {
       closeStorage()
       app.quit()
@@ -419,6 +476,7 @@ app.whenReady().then(() => {
   }
 
   createWindow()
+  createTray()
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the

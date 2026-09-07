@@ -133,6 +133,11 @@ export interface EnvUpdateInput {
   proxyConfig?: ProxyConfig | null
 }
 
+export interface FingerprintUpdateInput {
+  id: string
+  fingerprint: CoreFingerprint
+}
+
 export interface IdInput {
   id: string
 }
@@ -192,6 +197,10 @@ export interface EnvTransfer {
   }>
 }
 
+export interface StartupSetting {
+  enabled: boolean
+}
+
 export interface LogSnapshot {
   lines: string[]
 }
@@ -212,6 +221,7 @@ export const IPC = {
   envGet: 'env:get',
   envCreate: 'env:create',
   envUpdate: 'env:update',
+  envUpdateFingerprint: 'env:update-fingerprint',
   envDelete: 'env:delete',
   envStart: 'env:start',
   envStop: 'env:stop',
@@ -224,6 +234,8 @@ export const IPC = {
   envExport: 'env:export',
   envImport: 'env:import',
   appLogs: 'app:logs',
+  appStartupGet: 'app:startup-get',
+  appStartupSet: 'app:startup-set',
   // 以下为主进程 → 渲染层事件（非 invoke）
   envStatusChanged: 'env:status-changed',
   envCrashed: 'env:crashed',
@@ -239,6 +251,7 @@ export const INVOKE_CHANNELS: IpcChannel[] = [
   IPC.envGet,
   IPC.envCreate,
   IPC.envUpdate,
+  IPC.envUpdateFingerprint,
   IPC.envDelete,
   IPC.envStart,
   IPC.envStop,
@@ -250,7 +263,9 @@ export const INVOKE_CHANNELS: IpcChannel[] = [
   IPC.appWipeData,
   IPC.envExport,
   IPC.envImport,
-  IPC.appLogs
+  IPC.appLogs,
+  IPC.appStartupGet,
+  IPC.appStartupSet
 ]
 
 export type EventChannel =
@@ -265,6 +280,7 @@ export interface IpcPayloadMap {
   [IPC.envGet]: IdInput
   [IPC.envCreate]: EnvCreateInput
   [IPC.envUpdate]: EnvUpdateInput
+  [IPC.envUpdateFingerprint]: FingerprintUpdateInput
   [IPC.envDelete]: IdInput
   [IPC.envStart]: IdInput
   [IPC.envStop]: IdInput
@@ -277,6 +293,8 @@ export interface IpcPayloadMap {
   [IPC.envExport]: undefined
   [IPC.envImport]: undefined
   [IPC.appLogs]: undefined
+  [IPC.appStartupGet]: undefined
+  [IPC.appStartupSet]: StartupSetting
 }
 
 /** invoke 通道 → 返回数据类型 */
@@ -286,6 +304,7 @@ export interface IpcDataMap {
   [IPC.envGet]: Env | null
   [IPC.envCreate]: Env
   [IPC.envUpdate]: Env
+  [IPC.envUpdateFingerprint]: Env
   [IPC.envDelete]: { id: string }
   [IPC.envStart]: CountryChangeInfo | null // null = 直接启动成功
   [IPC.envStop]: { id: string }
@@ -299,6 +318,8 @@ export interface IpcDataMap {
   [IPC.envExport]: { count: number; path: string | null }
   [IPC.envImport]: { count: number; path: string | null }
   [IPC.appLogs]: LogSnapshot
+  [IPC.appStartupGet]: StartupSetting
+  [IPC.appStartupSet]: StartupSetting
 }
 
 // ---------- 渲染层入口 ----------
@@ -311,6 +332,7 @@ export interface Api {
   envGet(input: IdInput): Promise<Result<Env | null>>
   envCreate(input: EnvCreateInput): Promise<Result<Env>>
   envUpdate(input: EnvUpdateInput): Promise<Result<Env>>
+  envUpdateFingerprint(input: FingerprintUpdateInput): Promise<Result<Env>>
   envDelete(input: IdInput): Promise<Result<{ id: string }>>
   /** 返回 null = 直接启动成功；返回 CountryChangeInfo = 需确认对齐字段 */
   envStart(input: IdInput): Promise<Result<CountryChangeInfo | null>>
@@ -326,6 +348,8 @@ export interface Api {
   envExport(): Promise<Result<{ count: number; path: string | null }>>
   envImport(): Promise<Result<{ count: number; path: string | null }>>
   appLogs(): Promise<Result<LogSnapshot>>
+  appStartupGet(): Promise<Result<StartupSetting>>
+  appStartupSet(input: StartupSetting): Promise<Result<StartupSetting>>
   /** 订阅环境状态变化，返回取消订阅函数 */
   onStatusChanged(cb: (status: EnvStatusMap) => void): () => void
   /** 订阅环境崩溃通知（含退出码），返回取消订阅函数 */

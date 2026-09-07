@@ -21,6 +21,7 @@ const api: Api = {
   envGet: (input) => ipcRenderer.invoke(IPC.envGet, input),
   envCreate: (input) => ipcRenderer.invoke(IPC.envCreate, input),
   envUpdate: (input) => ipcRenderer.invoke(IPC.envUpdate, input),
+  envUpdateFingerprint: (input) => ipcRenderer.invoke(IPC.envUpdateFingerprint, input),
   envDelete: (input) => ipcRenderer.invoke(IPC.envDelete, input),
   envStart: (input) => ipcRenderer.invoke(IPC.envStart, input),
   envStop: (input) => ipcRenderer.invoke(IPC.envStop, input),
@@ -33,6 +34,8 @@ const api: Api = {
   envExport: () => ipcRenderer.invoke(IPC.envExport),
   envImport: () => ipcRenderer.invoke(IPC.envImport),
   appLogs: () => ipcRenderer.invoke(IPC.appLogs),
+  appStartupGet: () => ipcRenderer.invoke(IPC.appStartupGet),
+  appStartupSet: (input) => ipcRenderer.invoke(IPC.appStartupSet, input),
   onStatusChanged: (cb: (status: EnvStatusMap) => void) =>
     subscribe<EnvStatusMap>(IPC.envStatusChanged, cb),
   onCrashed: (cb: (info: CrashedInfo) => void) => subscribe<CrashedInfo>(IPC.envCrashed, cb),

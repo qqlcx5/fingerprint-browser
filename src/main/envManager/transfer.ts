@@ -1,6 +1,6 @@
 import { dialog } from 'electron'
 import { readFileSync, writeFileSync } from 'fs'
-import type { EnvTransfer, PublicProxyConfig } from '../../shared/types'
+import type { EnvTransfer, ProxyConfig, PublicProxyConfig } from '../../shared/types'
 import { createEnvWithDirs, getEnvDao, toPublicProxy, type EnvRecord } from '../db'
 
 function exportRecord(record: EnvRecord): EnvTransfer['environments'][number] {
@@ -53,9 +53,7 @@ export async function importEnvs(): Promise<{ count: number; path: string | null
   const transfer = parseTransfer(readFileSync(filePath, 'utf8'))
   const dao = getEnvDao()
   for (const item of transfer.environments) {
-    const proxyConfig = item.proxyConfig
-      ? toImportProxy(item.proxyConfig)
-      : null
+    const proxyConfig = item.proxyConfig ? toImportProxy(item.proxyConfig) : null
     createEnvWithDirs(dao, {
       name: item.name.trim(),
       remark: item.remark ?? '',
@@ -68,7 +66,7 @@ export async function importEnvs(): Promise<{ count: number; path: string | null
   return { count: transfer.environments.length, path: filePath }
 }
 
-function toImportProxy(proxy: PublicProxyConfig) {
+function toImportProxy(proxy: PublicProxyConfig): ProxyConfig {
   return {
     type: proxy.type,
     host: proxy.host,

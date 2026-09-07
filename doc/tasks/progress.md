@@ -3,7 +3,7 @@
 > 用法：子任务完成 → 在对应模块 md 打勾；模块全部完成 → 在此处打勾并填日期。
 > 依赖顺序：01 → 02 → 03 → (04 ∥ 05) → 06 → 07 → 08 → 09
 > 08 可在 04/05 未完成时用 mock api 并行开发。
-> 多 agent 并行时：本文件**仅协调者更新**，agent 只勾自己的模块 md，边界规则见 parallel-plan.md。
+> 多窗口并行（同目录）时：本文件**只有你本人更新**，窗口 agent 只勾自己的模块 md，硬规则见 parallel-plan.md §2。
 
 ## 模块完成情况
 
@@ -26,6 +26,6 @@
 
 ## 当前进行中（每次开工更新，防止上下文丢失）
 
-- 当前状态：阶段 0 已完成（01 合同冻结）
-- 下一个：创建 worktree，4 agent 并行 → 02-storage / 03-kernel / 04-proxy / 05-fingerprint（见 parallel-plan.md §2）
+- 当前状态：阶段 0 已完成（01 合同冻结）；并行模式改为同目录多窗口（无 worktree）
+- 下一个：开 4 个窗口 → A=02-storage / B=03-kernel / C=04-proxy / D=05-fingerprint，提示词复制 parallel-plan.md §3
 - 阻塞项：无

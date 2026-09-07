@@ -141,6 +141,14 @@ async function downloadWithResume(
         if (await fetchToFile(url, partPath, cb.onProgress)) return
       } catch (e) {
         lastErr = e instanceof InterruptedDownload ? (e.reason ?? e) : e
+        // 写入时磁盘满：换镜像也无法挽回，立即按 DISK_FULL 抛出（T5 错误分类）
+        if (
+          lastErr &&
+          typeof lastErr === 'object' &&
+          (lastErr as { code?: string }).code === 'ENOSPC'
+        ) {
+          throw kernelError('DISK_FULL', '磁盘空间不足（下载写入时），请清理磁盘后重试')
+        }
       }
     }
   }

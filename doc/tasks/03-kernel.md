@@ -16,6 +16,7 @@
 
 - **revision 不硬编码**：`readChromiumDescriptor()` 读 playwright-core 1.63 的 browsers.json（chromium → revision 1243 / browserVersion 153.0.8010.12）；平台表（EXECUTABLE_TOKENS / DOWNLOAD_ZIP）逐项对照 playwright-core 内部 EXECUTABLE_PATHS / DOWNLOAD_PATHS（CFT 布局）镜像，升级 playwright-core 后若布局变化由 ready 校验立即暴露
 - **镜像轮换**（2026-09-07 修正）：playwright 1.63 对 CFT 构建官方仅列 `cdn.playwright.dev`；实测 npmmirror 已托管 `builds/cft/*`（HTTP 200，~182MB）、官方 307 可跟随、prss 直连 400。修复原实现「3 次尝试固定打前 3 个镜像、官方源永远轮不到」的缺陷：改为**全部镜像各试一次为一轮 × 最多 2 轮**，顺序 npmmirror → 官方 → ESRP 兜底；`PLAYWRIGHT_CHROMIUM_DOWNLOAD_HOST` / `PLAYWRIGHT_DOWNLOAD_HOST` 命中时只用自定义源（与 playwright 语义一致）
+- **错误分类补口**（2026-09-07 二次修正）：下载写入期 ENOSPC 立即中断轮换并抛 `DISK_FULL`（原实现会耗尽轮次后误报 KERNEL_DOWNLOAD_FAILED）。至此 T5 三分类完整：预检不足 2GB / 写入磁盘满 → `DISK_FULL`；镜像全部失败/断网 → `KERNEL_DOWNLOAD_FAILED`；解压或校验失败 → `KERNEL_CORRUPT`
 - **完整性三道关**：传输大小核对 → zip 中央目录可读（yauzl open）→ 解压后可执行文件校验；任一失败 → `KERNEL_CORRUPT` + 清理 .part/staging，下次 `browser:ensure` 全新下载（§9 引导重下）
 - **断点续传**：`.part` 文件 + Range 请求；服务器忽略 Range 回 200 时覆盖重写；416 视为已下完（由 zip 校验兜底）；30s 空闲看门狗中断僵死连接后续传
 - **解压安全**（unzip.ts，复用 playwright-core 内置 yauzl，零新依赖）：保留 unix 权限位与符号链接、跳过 `__MACOSX`、realpath 防路径穿越；`.part` → staging → 原子 rename 落位
@@ -39,4 +40,8 @@
   8. 损坏 zip → `KERNEL_CORRUPT` ✅
   9. 构造 `../escape.txt` 恶意条目 → `KERNEL_CORRUPT` 且未逃逸 ✅
 - 镜像实测：npmmirror `builds/cft/…` HTTP 200（190,970,181B）；cdn.playwright.dev 307（fetch follow）；prss 400（轮换跳过）
-- **未验证（集成阶段补）**：真实 190MB 全量下载 → 启动 Chromium（需 `pnpm exec electron`，本窗口禁跑）；断网/拔盘下的 DISK_FULL 现场复现
+- **真实 E2E（2026-09-07 二次验证，esbuild 桩替 electron，纯 Node 运行）**：
+  - 冷启动全量：`ensureKernel()` 17.9s 完成 190MB 下载→解压→原子落位，`Google Chrome for Testing --version` → `153.0.8010.12` 真实可运行；二次调用快路径 0ms 命中 ready
+  - 断点续传：预置 .part 前 8MB + 抹除安装目录 → 首个进度事件 `received=8400288`（从断点继续），末事件 received=total=190970181，安装后内核可运行，成功后 .part 已清理
+  - 失败分类：镜像不可达（127.0.0.1:9）→ 2 轮轮换后抛 `KERNEL_DOWNLOAD_FAILED`（连接拒绝发生在写入前，无 .part 属预期）
+- **仍未验证（集成阶段补）**：Electron 主进程内 `registerKernelIpc()` 全链路（需 `pnpm exec electron`，本窗口禁跑）；磁盘真满现场复现（ENOSPC 分类为代码审阅级验证）

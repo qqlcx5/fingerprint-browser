@@ -1,11 +1,13 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, safeStorage, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
+import { tmpdir } from 'os'
 import { createRequire } from 'module'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/types'
 import { defineIpc, registerIpc } from './ipc'
 import { setupStorage, closeStorage, getEnvDao } from './db'
 import { initStatuses, cleanupOrphanChromium, stopAllRunning, getRunningIds } from './launcher'
+import { registerEnvManagerIpc, pushNotice } from './envManager'
 import { registerKernelIpc } from './kernel'
 import { registerProxyIpc } from './proxy'
 import icon from '../../resources/icon.png?asset'
@@ -74,16 +76,39 @@ async function runSmoke(): Promise<void> {
   const res = await win.webContents.executeJavaScript(
     `(async () => {
       const ping = await window.api.ping()
-      const list = await window.api.envList()
-      return { ping, list }
+      const created = await window.api.envCreate({ name: 'smoke-env' })
+      const list1 = await window.api.envList()
+      const del = created.ok ? await window.api.envDelete({ id: created.data.id }) : created
+      const list2 = await window.api.envList()
+      const status = await window.api.envStatus()
+      const notices = await window.api.appNotices()
+      return { ping, created, list1, del, list2, status, notices }
     })()`
   )
   console.log('E2E_PING', JSON.stringify(res.ping))
-  console.log('E2E_LIST', JSON.stringify(res.list))
+  console.log(
+    'E2E_CRUD',
+    JSON.stringify({
+      created: res.created.ok,
+      list1Count: res.list1.ok ? res.list1.data.length : -1,
+      deleted: res.del.ok,
+      list2Count: res.list2.ok ? res.list2.data.length : -1
+    })
+  )
+  console.log('E2E_STATUS', JSON.stringify(res.status))
+  console.log('E2E_NOTICES', JSON.stringify(res.notices))
   const pingOk = res.ping.ok && res.ping.data.pong === true && res.ping.data.sqlite === true
-  const listOk = !res.list.ok && res.list.error.code === 'NOT_IMPLEMENTED'
-  console.log('E2E_RESULT', pingOk && listOk ? 'PASS' : 'FAIL')
-  app.exit(pingOk && listOk ? 0 : 1)
+  const crudOk =
+    res.created.ok &&
+    res.del.ok &&
+    res.list1.ok &&
+    res.list1.data.length === 1 &&
+    res.list2.ok &&
+    res.list2.data.length === 0 &&
+    res.status.ok &&
+    Object.values(res.status.data).every((s) => s === 'idle')
+  console.log('E2E_RESULT', pingOk && crudOk ? 'PASS' : 'FAIL')
+  app.exit(pingOk && crudOk ? 0 : 1)
 }
 
 app.whenReady().then(() => {
@@ -107,10 +132,18 @@ app.whenReady().then(() => {
 
   // 统一接线：已定义通道走处理器，未定义通道返回 NOT_IMPLEMENTED 占位
   // 存储层需在 registerIpc() 前就绪（db/index.ts 约定）
+  // 冒烟模式用临时 userData，不碰用户真实数据（需在任何存储初始化前设置）
+  if (process.env['E2E_SMOKE'] === '1') {
+    app.setPath('userData', join(tmpdir(), `fp-smoke-${Date.now()}`))
+  }
+
   const storage = setupStorage()
   if (storage.reset) {
-    // §9：库损坏已自动重建，渲染层应提示“环境列表为空属预期”（08-T8）
-    console.warn('[storage] 数据库已重置，环境列表为空属预期')
+    // §9：库损坏已自动重建 → 启动期通知，渲染层挂载后拉取（07-T9）
+    pushNotice('db_reset', '数据库曾损坏，已自动重建；环境列表为空属预期')
+  }
+  if (!safeStorage.isEncryptionAvailable()) {
+    pushNotice('weak_encryption', '系统安全加密不可用，代理密码将以混淆方式存储（§8）')
   }
   // 运行状态初始化（§5：不落库，启动时全部 idle）+ 孤儿 Chromium 清理（06-T1/T5）
   initStatuses(
@@ -121,6 +154,7 @@ app.whenReady().then(() => {
   void cleanupOrphanChromium()
   registerKernelIpc()
   registerProxyIpc()
+  registerEnvManagerIpc()
   registerIpc()
 
   // 退出前先逐环境优雅停止（06-T7），再落盘（05-WAL checkpoint）

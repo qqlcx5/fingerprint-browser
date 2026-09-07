@@ -7,10 +7,10 @@
 ## 任务清单
 
 - [x] T1 electron-builder 基础配置：appId/产品名/图标/版本、asar、原生模块（better-sqlite3）打包验证 —— macOS `--dir` 包与包内 E2E 已通过（2026-09-08）
-- [ ] T2 Windows x64：nsis 安装/启动/卸载全流程验证；卸载后 userData 保留；提供"彻底清除数据"入口（§8）—— **NSIS 配置已完成**（向导式 + license 页 + `deleteAppDataOnUninstall: false`），装机验证待阶段 4；"彻底清除数据"入口由 08-ui T10 承载
+- [ ] T2 Windows x64：nsis 安装/启动/卸载全流程验证；卸载后 userData 保留；提供"彻底清除数据"入口（§8）—— **延期**：NSIS 配置已完成（向导式 + license 页 + `deleteAppDataOnUninstall: false`），等待可用 Windows x64 环境后执行；"彻底清除数据"入口由 08-ui T10 承载
 - [x] T3 macOS arm64：dmg 验证；签名/公证占位（无证书时记录 TODO）—— DMG 已生成、挂载、DMG 内 app E2E PASS（2026-09-08）；`identity: null` / `notarize: false` 的正式分发 TODO 已记录
 - [x] T4 合规物料：安装协议文案（用途限制，禁"防封号"表述，§1）+ 开源许可汇总页（electron-builder licenses）+ 用户文档（§10 已知边界四条、内核升级后旧环境 UA 与新内核不一致窗口的说明义务）
-- [ ] T5 发布冒烟清单：执行验收 1–9 全量回归并记录到本文档附录；量化记录性能锚点——单环境启动 ≤5s（不含代理测试）、10 并行 30 分钟整机内存 ≤6GB 无崩溃（§7/验收 7）；内核升级流程文档化（升级 playwright-core → fp-check 回归，§3）—— **清单与流程已写入下方附录**，执行待阶段 4
+- [ ] T5 发布冒烟清单：执行验收 1–9 全量回归并记录到本文档附录；量化记录性能锚点——单环境启动 ≤5s（不含代理测试）、10 并行 30 分钟整机内存 ≤6GB 无崩溃（§7/验收 7）；内核升级流程文档化（升级 playwright-core → fp-check 回归，§3）—— **清单与流程已写入下方附录**；完整 10 环境 30 分钟物理内存采样延期至具备长时运行环境后执行
 
 ## 实现说明（2026-09-07，配置与物料层）
 

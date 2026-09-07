@@ -5,7 +5,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import { IPC } from '../shared/types'
-import type { Api, EnvStatusMap, DownloadProgress } from '../shared/types'
+import type { Api, EnvStatusMap, DownloadProgress, CrashedInfo } from '../shared/types'
 
 function subscribe<T>(channel: string, cb: (data: T) => void): () => void {
   const listener = (_event: IpcRendererEvent, data: T): void => cb(data)
@@ -27,8 +27,11 @@ const api: Api = {
   proxyTest: (input) => ipcRenderer.invoke(IPC.proxyTest, input),
   browserEnsure: () => ipcRenderer.invoke(IPC.browserEnsure),
   alignConfirm: (input) => ipcRenderer.invoke(IPC.alignConfirm, input),
+  appNotices: () => ipcRenderer.invoke(IPC.appNotices),
+  appWipeData: () => ipcRenderer.invoke(IPC.appWipeData),
   onStatusChanged: (cb: (status: EnvStatusMap) => void) =>
     subscribe<EnvStatusMap>(IPC.envStatusChanged, cb),
+  onCrashed: (cb: (info: CrashedInfo) => void) => subscribe<CrashedInfo>(IPC.envCrashed, cb),
   onDownloadProgress: (cb: (progress: DownloadProgress) => void) =>
     subscribe<DownloadProgress>(IPC.browserDownloadProgress, cb)
 }

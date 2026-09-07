@@ -5,6 +5,7 @@
 > 08 可在 04/05 未完成时用 mock api 并行开发。
 > 多窗口并行（同目录）时：本文件**只有你本人更新**，窗口 agent 只勾自己的模块 md，硬规则见 parallel-plan.md §2。
 > 2026-09-07 对抗式审查（对照需求文档 v1.1 逐条核对）：修补 16 处缺口——env:status 实现认领（07-T7）、应用退出钩子（06-T7）、滚动日志器（02-T6）、下载目录隔离落地、create 出口国家来源、app:wipeData（07-T8）等；阶段 0 已核实完成（01 全勾 + 冒烟通过）。需求↔任务追溯矩阵见 traceability.md。
+> 2026-09-07 二次审查（01 模块对抗式复核，验证记录全部复现）：契约增量 +3 通道（env:crashed 事件 / app:notices 拉取 / app:wipeData，types.ts+preload 已同步）；国家变更检测时机决策收敛到 env:start（07-T2）；EgressInfo all-or-nothing 口径记录于 traceability.md「显式契约决策记录」。
 
 ## 模块完成情况
 

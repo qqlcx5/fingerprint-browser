@@ -7,10 +7,11 @@
 ## 任务清单
 
 - [ ] T1 `env:create`：校验名称 → 生成核心指纹 + 对齐字段（§6.5 两段式）→ 落库 → 建目录 → 返回 `Env`。出口国家来源：有代理先 `proxy:test` 取 country 作为指纹生成输入；无代理用直连基准（系统 locale/时区）；代理测试失败允许保存、以直连基准生成并记日志
-- [ ] T2 `env:update`：改名称/备注/代理；代理变更时经 `proxy:test` 取新出口国家 → 国家变化返回 `NEEDS_CONFIRM` 标记（不自动改对齐字段）；`align:confirm`（T3）已入冻结契约但为需求文档 §4 之外的新增通道，需回写需求文档
+- [ ] T2 `env:update`：改名称/备注/代理；**不做**国家变更检测（2026-09-07 决策：检测时机收敛到 env:start——启动前本就强制 proxy:test，且契约 `envStart → CountryChangeInfo|null` 已端到端支持，避免编辑时重复测代理）；`align:confirm` 已入冻结契约但为需求文档 §4 之外的新增通道，需回写需求文档
 - [ ] T3 确认流接口 `align:confirm`：渲染层确认后仅更新对齐字段（核心指纹只读，T-05/03 约束兜底）；取消则保留旧对齐字段
 - [ ] T4 `env:start / env:stop`：调 launcher（内核 ensure → 启动流水线），错误码原样透传给渲染层；env:start 成功后更新 last_launched_at
 - [ ] T5 `env:delete`：运行中拒绝（`code=ENV_RUNNING`）；否则 DB 记录 + 两目录全删（§6.1 二次确认由界面做）
 - [ ] T6 `env:list`：DB 记录 join 内存运行状态，输出列表模型（名称/代理摘要/状态/最后启动时间）
 - [ ] T7 IPC `env:status`：返回 `Record<id, EnvStatus>`（§4 契约通道，常量已在冻结 types.ts，此处补实现；UI 首屏状态来源）
-- [ ] T8 IPC `app:wipeData`：关停全部运行环境 → 删除 userData 下环境数据目录与数据库（二次确认由 UI 做，§8"彻底清除数据"）；通道常量尚未入冻结 types.ts，需协调者补充
+- [ ] T8 IPC `app:wipeData`：关停全部运行环境 → 删除 db + `envs/` 全部环境数据目录（内核与日志保留，避免重下 300MB；二次确认由 UI 做，§8"彻底清除数据"）；通道已冻结于 types.ts（返回 `{wipedEnvs}`）
+- [ ] T9 IPC `app:notices`：启动期通知队列——收集 02 的 db_reset / weak_encryption 标记，渲染层挂载后拉取一次、读后清空（拉取而非推送：通知产生于 app ready 时，早于渲染层订阅，事件会丢）

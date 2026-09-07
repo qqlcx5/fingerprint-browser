@@ -158,6 +158,24 @@ export interface KernelInfo {
   path: string | null
 }
 
+/** 环境崩溃通知（06-T6 推送；状态回滚 idle 仍走 env:status-changed） */
+export interface CrashedInfo {
+  envId: string
+  /** 进程退出码；被信号终止时为 null */
+  exitCode: number | null
+}
+
+/**
+ * 启动期一次性通知（对抗式审查缺口 C：db 重置/加密降级发生在 app ready 时，
+ * 早于渲染层订阅，事件会丢，因此用拉取通道而非广播；渲染层挂载后取一次，读后清空）
+ */
+export type NoticeKind = 'db_reset' | 'weak_encryption'
+
+export interface StartupNotice {
+  kind: NoticeKind
+  message: string
+}
+
 /** 骨架自检通道返回（better-sqlite3 原生模块可用性） */
 export interface PingInfo {
   pong: true
@@ -180,8 +198,11 @@ export const IPC = {
   proxyTest: 'proxy:test',
   browserEnsure: 'browser:ensure',
   alignConfirm: 'align:confirm',
+  appNotices: 'app:notices',
+  appWipeData: 'app:wipeData',
   // 以下为主进程 → 渲染层事件（非 invoke）
   envStatusChanged: 'env:status-changed',
+  envCrashed: 'env:crashed',
   browserDownloadProgress: 'browser:download-progress'
 } as const
 
@@ -199,11 +220,15 @@ export const INVOKE_CHANNELS: IpcChannel[] = [
   IPC.envStatus,
   IPC.proxyTest,
   IPC.browserEnsure,
-  IPC.alignConfirm
+  IPC.alignConfirm,
+  IPC.appNotices,
+  IPC.appWipeData
 ]
 
 export type EventChannel =
-  (typeof IPC)['envStatusChanged'] | (typeof IPC)['browserDownloadProgress']
+  | (typeof IPC)['envStatusChanged']
+  | (typeof IPC)['envCrashed']
+  | (typeof IPC)['browserDownloadProgress']
 
 /** invoke 通道 → 载荷类型 */
 export interface IpcPayloadMap {
@@ -218,6 +243,8 @@ export interface IpcPayloadMap {
   [IPC.proxyTest]: ProxyConfig
   [IPC.browserEnsure]: undefined
   [IPC.alignConfirm]: AlignConfirmInput
+  [IPC.appNotices]: undefined
+  [IPC.appWipeData]: undefined
 }
 
 /** invoke 通道 → 返回数据类型 */
@@ -233,6 +260,9 @@ export interface IpcDataMap {
   [IPC.proxyTest]: EgressInfo
   [IPC.browserEnsure]: KernelInfo
   [IPC.alignConfirm]: { id: string }
+  [IPC.appNotices]: StartupNotice[]
+  /** 清除的环境数据目录数（db + envs/，内核与日志保留） */
+  [IPC.appWipeData]: { wipedEnvs: number }
 }
 
 // ---------- 渲染层入口 ----------
@@ -251,8 +281,14 @@ export interface Api {
   proxyTest(input: ProxyConfig): Promise<Result<EgressInfo>>
   browserEnsure(): Promise<Result<KernelInfo>>
   alignConfirm(input: AlignConfirmInput): Promise<Result<{ id: string }>>
+  /** 启动期一次性通知（DB 重置、加密降级等）；渲染层挂载后拉取一次，读后清空 */
+  appNotices(): Promise<Result<StartupNotice[]>>
+  /** 彻底清除数据（§8）：关停全部环境 → 删 db + envs/；内核与日志保留；二次确认由 UI 做 */
+  appWipeData(): Promise<Result<{ wipedEnvs: number }>>
   /** 订阅环境状态变化，返回取消订阅函数 */
   onStatusChanged(cb: (status: EnvStatusMap) => void): () => void
+  /** 订阅环境崩溃通知（含退出码），返回取消订阅函数 */
+  onCrashed(cb: (info: CrashedInfo) => void): () => void
   /** 订阅内核下载进度，返回取消订阅函数 */
   onDownloadProgress(cb: (progress: DownloadProgress) => void): () => void
 }

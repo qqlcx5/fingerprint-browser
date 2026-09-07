@@ -5,6 +5,13 @@
 > 结论：P0 全覆盖；P1/P2 登记于 progress.md「P1/P2 待办」，暂不拆任务。
 > 标注 **（审查补）** 的条目为本次审查新增/修订；阶段 0（01）已由并行 agent 完成并冒烟通过。
 
+## 显式契约决策记录（偏离/澄清需求文档处，验收时按此口径）
+
+1. **EgressInfo 形状**：需求 §4 写 `{ok, ip?, country?, latencyMs?, code?}`（允许部分成功）；实现收敛为 Result 信封 + 三字段全必填（all-or-nothing：任一查询失败即整体失败）。语义更严格，04 实现按此口径。
+2. **国家变更检测时机**：需求 §6.5 未明确在"改代理时"还是"启动时"弹窗（2026-09-07 决策）：收敛到 env:start——启动前本就强制 proxy:test，避免编辑时重复测代理；`envStart → CountryChangeInfo|null` + `align:confirm` 端到端承载。
+3. **wipeData 语义**：清环境数据（db + envs/），内核与日志保留（避免用户误操作后重下 300MB 内核）。
+4. **align:confirm / app:ping / app:notices / app:wipeData / env:crashed** 均为需求 §4 之外新增通道，需求文档下版需回写。
+
 ## §4 IPC 契约（invoke + event）
 
 | 通道 | 类型 | 认领任务 | 备注 |
@@ -20,8 +27,10 @@
 | proxy:test | invoke | 04-T4 | |
 | browser:ensure | invoke | 03-T5 | |
 | align:confirm | invoke | 07-T3 | 契约外新增，已入冻结 types.ts，需回写需求文档 §4 |
-| app:wipeData | invoke | 07-T8（审查补） | 尚未入冻结 types.ts，需协调者补常量 |
+| app:notices | invoke | 07-T9（审查补·二次） | 拉取式启动通知：db_reset / weak_encryption（产生早于渲染层订阅，事件会丢故用拉取） |
+| app:wipeData | invoke | 07-T8（审查补） | 已入冻结 types.ts（2026-09-07 契约增量） |
 | env:status-changed | event | 06-T1 | |
+| env:crashed | event | 06-T6（审查补·二次） | CrashedInfo{envId, exitCode}；已入冻结 types.ts |
 | browser:download-progress | event | 03-T4 | |
 
 ## §5 数据模型与存储
@@ -76,8 +85,8 @@
 | 代理超时 / DNS 失败 | 04-T3 | 08-T4 |
 | 内核缺失/损坏 | 03-T1/T3/T5 | 08-T6/T8 |
 | 磁盘空间不足 | 03-T2/T5 | 08-T6 |
-| SQLite 损坏 → 备份重建 | 02-T2 | 08-T8（审查补） |
-| Chromium 崩溃 → idle 回滚+日志 | 06-T6 | 08-T9（审查补） |
+| SQLite 损坏 → 备份重建 | 02-T2 | 08-T8（经 app:notices 拉取） |
+| Chromium 崩溃 → idle 回滚+日志 | 06-T6（env:crashed 事件） | 08-T9 |
 | 异常退出孤儿清理 | 06-T5 | 无需用户干预 |
 
 ## §12 验收标准 1–9

@@ -35,3 +35,7 @@
 - pnpm 10 原生模块构建许可在 `pnpm-workspace.yaml` 的 `allowBuilds`（better-sqlite3 已置 true）
 - `node-gyp` 不随 pnpm 提供，已 `npm i -g node-gyp`（全局，worktree 复用）
 - `.npmrc` 已配 npmmirror（registry / node 头文件 / electron / better-sqlite3 预编译二进制）
+
+## 协调变更记录
+
+- 2026-09-07 二次审查（对抗式复核 01，验证记录全部复现 PASS）：冻结契约**增量** +3 通道——`env:crashed`（事件，CrashedInfo）、`app:notices`（invoke 拉取，StartupNotice）、`app:wipeData`（invoke）；types.ts 与 preload Api 已同步，纯增量未动既有通道。补建 `src/main/{db,kernel,proxy,fingerprint,launcher}/` 与 `renderer/src/components/`（.gitkeep）。检测时机/wipeData 语义等决策见 traceability.md「显式契约决策记录」。

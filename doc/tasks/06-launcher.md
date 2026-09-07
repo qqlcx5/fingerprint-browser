@@ -11,5 +11,5 @@
 - [ ] T3 `launcher/stop.ts`：优雅 `close()`，5s 超时强杀进程树（Windows 需 taskkill /T）
 - [ ] T4 窗口关闭 = 停止：监听 context close 事件，状态回写 idle（§6.6 语义）
 - [ ] T5 `launcher/orphan.ts`：主进程启动时按 userDataDir 路径匹配进程命令行，清理上次崩溃留下的孤儿 Chromium
-- [ ] T6 崩溃处理：进程异常退出 → 状态回 idle + 推送通知事件 + 退出码写日志（§9）
+- [ ] T6 崩溃处理：进程异常退出 → 状态回 idle + 经 `env:crashed` 事件推送 `CrashedInfo{envId, exitCode}`（通道已冻结于 types.ts）+ 退出码写日志（§9）
 - [ ] T7 应用退出钩子：before-quit 逐个优雅停止所有运行中环境，单个 5s 超时强杀（§6.6），防止孤儿进程与脏状态

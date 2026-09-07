@@ -51,7 +51,8 @@ mac:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  # ${arch} 区分 x64 / arm64 产物，避免 CI 双架构发布时同名冲突
+  artifactName: ${name}-${version}-${arch}.${ext}
 # §7 注：Linux 兼容不在 M3 验收范围，仅保留 target 配置
 linux:
   target:

@@ -1,0 +1,68 @@
+# CI 构建：push / PR 时在三大平台验证打包是否成功，产物作为 Artifact 供下载
+# 发布正式版本请使用 release.yml（push tag 触发）
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-13, macos-14, ubuntu-22.04]
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-13 # Intel
+            platform: mac
+          - os: macos-14 # Apple Silicon (arm64)
+            platform: mac
+          - os: ubuntu-22.04
+            platform: linux
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 打包（不发版）。postinstall 已通过 electron-builder install-app-deps
+      # 按 Electron ABI 重编 better-sqlite3，无需额外 rebuild
+      - name: Build (${{ matrix.platform }})
+        run: pnpm run build:${{ matrix.platform }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.platform }}-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: ignore
+          retention-days: 7

@@ -1,0 +1,80 @@
+# 发布工作流：push v* tag 时在三大平台打包并发布到 GitHub Releases
+# 触发：git tag v1.0.1 && git push origin v1.0.1
+# 产物：Windows NSIS 安装包 / macOS DMG (x64 + arm64) / Linux AppImage + deb
+#
+# 签名（可选，未配置则跳过）：
+#   Windows: Secrets 配置 CSC_LINK (PFX base64) + CSC_KEY_PASSWORD
+#   macOS:   Secrets 配置 CSC_LINK (.p12 base64) + CSC_KEY_PASSWORD
+#            公证需额外配置 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # 创建 Release 必需
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-13, macos-14, ubuntu-22.04]
+        include:
+          - os: windows-latest
+            platform: win
+          - os: macos-13 # Intel -> x64 dmg
+            platform: mac
+          - os: macos-14 # Apple Silicon -> arm64 dmg
+            platform: mac
+          - os: ubuntu-22.04
+            platform: linux
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # electron-builder.yml 中 publish 为 generic 占位配置，
+      # 此处通过 -c.publish.provider=github 覆盖为发布到 GitHub Releases
+      - name: Build & Release (${{ matrix.platform }})
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # —— 代码签名（可选，配置 Secret 后自动启用）——
+          # CSC_LINK: ${{ secrets.CSC_LINK }}
+          # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # —— macOS 公证（可选）——
+          # APPLE_ID: ${{ secrets.APPLE_ID }}
+          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm run build:${{ matrix.platform }} -c.publish.provider=github -c.publish.releaseType=draft
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,18 +1,20 @@
 <script setup lang="ts">
-import { toasts } from '../lib/toast'
+import { CircleAlert, CircleCheck, Info } from '@lucide/vue'
+import type { Component } from 'vue'
+import { toasts, type ToastItem } from '../lib/toast'
 
-const kindIcon: Record<string, string> = {
-  success: 'icon-[lucide--check-circle]',
-  error: 'icon-[lucide--alert-circle]',
-  info: 'icon-[lucide--info]'
+const kindIcon: Record<ToastItem['kind'], Component> = {
+  success: CircleCheck,
+  error: CircleAlert,
+  info: Info
 }
 </script>
 
 <template>
   <div class="toast-host" aria-live="polite">
     <div v-for="t in toasts" :key="t.id" class="toast" :class="`toast--${t.kind}`">
-      <span :class="kindIcon[t.kind]"></span>
-      {{ t.text }}
+      <component :is="kindIcon[t.kind]" class="toast__icon" aria-hidden="true" />
+      <span>{{ t.text }}</span>
     </div>
   </div>
 </template>
@@ -29,11 +31,21 @@ const kindIcon: Record<string, string> = {
   max-width: 380px;
 }
 .toast {
-  padding: 10px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
   border-radius: 8px;
   font-size: 13px;
+  line-height: 1.45;
   box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
   word-break: break-all;
+}
+.toast__icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
 }
 .toast--error {
   background: #fef2f2;

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { TriangleAlert, X } from '@lucide/vue'
 import { useNotices } from './composables/useNotices'
 import KernelGate from './components/KernelGate.vue'
 import AppToasts from './components/AppToasts.vue'
@@ -15,10 +16,18 @@ const { notices, dismiss } = useNotices()
     <div v-if="notices.length" class="banners">
       <div v-for="n in notices" :key="n.kind" class="banner banner--warn">
         <span class="banner__msg">
-          <span class="icon-[lucide--triangle-alert]"></span>
+          <TriangleAlert aria-hidden="true" />
           {{ n.message }}
         </span>
-        <button class="banner__x" type="button" @click="dismiss(n.kind)">×</button>
+        <button
+          class="banner__x"
+          type="button"
+          :aria-label="`关闭提示：${n.message}`"
+          title="关闭提示"
+          @click="dismiss(n.kind)"
+        >
+          <X aria-hidden="true" />
+        </button>
       </div>
     </div>
     <KernelGate>
@@ -61,8 +70,15 @@ const { notices, dismiss } = useNotices()
 .banner__x {
   border: none;
   background: none;
-  font-size: 16px;
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 6px;
   cursor: pointer;
   color: inherit;
+}
+.banner__x:hover {
+  background: rgb(146 64 14 / 10%);
 }
 </style>

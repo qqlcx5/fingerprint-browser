@@ -124,10 +124,17 @@ async function runSmoke(): Promise<void> {
   let runtimeOk = true
   if (process.env['E2E_RUNTIME'] === '1') {
     const count = Math.max(1, Math.min(10, Number(process.env['E2E_RUNTIME_COUNT'] ?? '1')))
+    const runtimeProxies = JSON.parse(process.env['E2E_RUNTIME_PROXIES'] ?? '[]') as unknown[]
     const runtime = await win.webContents.executeJavaScript(
       `(async () => {
+        const proxyConfigs = ${JSON.stringify(runtimeProxies)}
         const created = await Promise.all(
-          Array.from({ length: ${count} }, (_, i) => window.api.envCreate({ name: 'runtime-' + i }))
+          Array.from({ length: ${count} }, (_, i) =>
+            window.api.envCreate({
+              name: 'runtime-' + i,
+              ...(proxyConfigs[i] ? { proxyConfig: proxyConfigs[i] } : {})
+            })
+          )
         )
         if (created.some((r) => !r.ok)) return { ok: false, phase: 'create' }
         const ids = created.map((r) => r.data.id)

@@ -1,7 +1,22 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
+import { createRequire } from 'module'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { IPC } from '../shared/types'
+import { defineIpc, registerIpc } from './ipc'
 import icon from '../../resources/icon.png?asset'
+
+const nodeRequire = createRequire(__filename)
+
+/** 骨架自检：better-sqlite3 原生模块在 Electron ABI 下是否可用（01-T6） */
+function sqliteAvailable(): boolean {
+  try {
+    nodeRequire('better-sqlite3')
+    return true
+  } catch {
+    return false
+  }
+}
 
 function createWindow(): void {
   // Create the browser window.
@@ -13,7 +28,9 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
     }
   })
 
@@ -38,9 +55,36 @@ function createWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
+/** E2E 冒烟模式：E2E_SMOKE=1 时无头自检 IPC 全链路后退出（CI/打包验收用） */
+async function runSmoke(): Promise<void> {
+  const win = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+  await win.loadFile(join(__dirname, '../renderer/index.html'))
+  const res = await win.webContents.executeJavaScript(
+    `(async () => {
+      const ping = await window.api.ping()
+      const list = await window.api.envList()
+      return { ping, list }
+    })()`
+  )
+  console.log('E2E_PING', JSON.stringify(res.ping))
+  console.log('E2E_LIST', JSON.stringify(res.list))
+  const pingOk = res.ping.ok && res.ping.data.pong === true && res.ping.data.sqlite === true
+  const listOk = !res.list.ok && res.list.error.code === 'NOT_IMPLEMENTED'
+  console.log('E2E_RESULT', pingOk && listOk ? 'PASS' : 'FAIL')
+  app.exit(pingOk && listOk ? 0 : 1)
+}
+
 app.whenReady().then(() => {
   // Set app user model id for windows
-  electronApp.setAppUserModelId('com.electron')
+  electronApp.setAppUserModelId('com.fingerprint-browser.app')
 
   // Default open or close DevTools by F12 in development
   // and ignore CommandOrControl + R in production.
@@ -49,8 +93,21 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  // 骨架自检通道（01-T5/T6 验收）
+  defineIpc(IPC.appPing, () => ({
+    pong: true as const,
+    version: app.getVersion(),
+    arch: process.arch,
+    sqlite: sqliteAvailable()
+  }))
+
+  // 统一接线：已定义通道走处理器，未定义通道返回 NOT_IMPLEMENTED 占位
+  registerIpc()
+
+  if (process.env['E2E_SMOKE'] === '1') {
+    void runSmoke()
+    return
+  }
 
   createWindow()
 

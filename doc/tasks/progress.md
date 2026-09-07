@@ -26,6 +26,6 @@
 
 ## 当前进行中（每次开工更新，防止上下文丢失）
 
-- 正在做：
-- 下一个：
-- 阻塞项：
+- 当前状态：阶段 0 已完成（01 合同冻结）
+- 下一个：创建 worktree，4 agent 并行 → 02-storage / 03-kernel / 04-proxy / 05-fingerprint（见 parallel-plan.md §2）
+- 阻塞项：无

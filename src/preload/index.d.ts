@@ -1,8 +1,10 @@
-import { ElectronAPI } from '@electron-toolkit/preload'
+import type { Api } from '../shared/types'
 
 declare global {
   interface Window {
-    electron: ElectronAPI
-    api: unknown
+    /** preload 白名单入口（见 src/shared/types.ts 的 Api） */
+    api: Api
   }
 }
+
+export {}

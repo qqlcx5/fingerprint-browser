@@ -1,22 +1,41 @@
-import { contextBridge } from 'electron'
-import { electronAPI } from '@electron-toolkit/preload'
+/**
+ * preload：contextBridge 白名单入口（冻结文件，见 doc/tasks/parallel-plan.md §3）
+ * 只暴露 shared/types.ts 中 Api 接口列出的方法；返回 Result 信封，永不 throw。
+ */
+import { contextBridge, ipcRenderer } from 'electron'
+import type { IpcRendererEvent } from 'electron'
+import { IPC } from '../shared/types'
+import type { Api, EnvStatusMap, DownloadProgress } from '../shared/types'
 
-// Custom APIs for renderer
-const api = {}
-
-// Use `contextBridge` APIs to expose Electron APIs to
-// renderer only if context isolation is enabled, otherwise
-// just add to the DOM global.
-if (process.contextIsolated) {
-  try {
-    contextBridge.exposeInMainWorld('electron', electronAPI)
-    contextBridge.exposeInMainWorld('api', api)
-  } catch (error) {
-    console.error(error)
+function subscribe<T>(channel: string, cb: (data: T) => void): () => void {
+  const listener = (_event: IpcRendererEvent, data: T): void => cb(data)
+  ipcRenderer.on(channel, listener)
+  return () => {
+    ipcRenderer.removeListener(channel, listener)
   }
+}
+
+const api: Api = {
+  ping: () => ipcRenderer.invoke(IPC.appPing),
+  envList: () => ipcRenderer.invoke(IPC.envList),
+  envCreate: (input) => ipcRenderer.invoke(IPC.envCreate, input),
+  envUpdate: (input) => ipcRenderer.invoke(IPC.envUpdate, input),
+  envDelete: (input) => ipcRenderer.invoke(IPC.envDelete, input),
+  envStart: (input) => ipcRenderer.invoke(IPC.envStart, input),
+  envStop: (input) => ipcRenderer.invoke(IPC.envStop, input),
+  envStatus: () => ipcRenderer.invoke(IPC.envStatus),
+  proxyTest: (input) => ipcRenderer.invoke(IPC.proxyTest, input),
+  browserEnsure: () => ipcRenderer.invoke(IPC.browserEnsure),
+  alignConfirm: (input) => ipcRenderer.invoke(IPC.alignConfirm, input),
+  onStatusChanged: (cb: (status: EnvStatusMap) => void) =>
+    subscribe<EnvStatusMap>(IPC.envStatusChanged, cb),
+  onDownloadProgress: (cb: (progress: DownloadProgress) => void) =>
+    subscribe<DownloadProgress>(IPC.browserDownloadProgress, cb)
+}
+
+// contextIsolation 必须开启（需求文档 §8）；走到 else 说明安全配置被改坏
+if (process.contextIsolated) {
+  contextBridge.exposeInMainWorld('api', api)
 } else {
-  // @ts-ignore (define in dts)
-  window.electron = electronAPI
-  // @ts-ignore (define in dts)
-  window.api = api
+  throw new Error('contextIsolation 必须开启：请检查 BrowserWindow webPreferences')
 }

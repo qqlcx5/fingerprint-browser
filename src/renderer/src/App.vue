@@ -1,54 +1,60 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { useNotices } from './composables/useNotices'
+import KernelGate from './components/KernelGate.vue'
+import AppToasts from './components/AppToasts.vue'
 import EnvListView from './views/EnvListView.vue'
 
-const ping = ref('自检中…')
-const statusJson = ref('{}')
-let offStatus: (() => void) | null = null
-
-onMounted(async () => {
-  // 01-T5 端到端验证：渲染层 → preload → 主进程 → 渲染层
-  const res = await window.api.ping()
-  ping.value = res.ok
-    ? `骨架 OK · v${res.data.version} · ${res.data.arch} · better-sqlite3 ${res.data.sqlite ? '可用' : '不可用'}`
-    : `ping 失败：${res.error.code} ${res.error.message}`
-
-  // 事件通道验证：主进程 broadcast → 渲染层订阅
-  offStatus = window.api.onStatusChanged((s) => {
-    statusJson.value = JSON.stringify(s)
-  })
-})
-
-onUnmounted(() => offStatus?.())
+// 启动期通知横幅（08-T8）：db_reset / weak_encryption
+const { notices, dismiss } = useNotices()
+// 崩溃通知（08-T9）在 EnvListView 内的 useEnvs 回调中订阅
+// 主界面不加载任何远程页面（§8）
 </script>
 
 <template>
-  <main class="page">
-    <h1>多账号环境隔离浏览器</h1>
-    <p class="ping" data-testid="ping">{{ ping }}</p>
-    <EnvListView />
-    <p class="tip">
-      状态事件（env:status-changed）：<code>{{ statusJson }}</code>
-    </p>
-  </main>
+  <div class="app">
+    <div v-if="notices.length" class="banners">
+      <div v-for="n in notices" :key="n.kind" class="banner banner--warn">
+        <span>{{ n.message }}</span>
+        <button class="banner__x" type="button" @click="dismiss(n.kind)">×</button>
+      </div>
+    </div>
+    <KernelGate>
+      <EnvListView />
+    </KernelGate>
+    <AppToasts />
+  </div>
 </template>
 
 <style scoped>
-.page {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 24px 16px;
+.app {
+  min-height: 100vh;
 }
-h1 {
-  font-size: 20px;
-  margin: 0 0 12px;
+.banners {
+  max-width: 860px;
+  margin: 12px auto 0;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.ping {
-  color: #16a34a;
-  margin: 0 0 24px;
+.banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
 }
-.tip {
-  color: #888;
-  font-size: 12px;
+.banner--warn {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+.banner__x {
+  border: none;
+  background: none;
+  font-size: 16px;
+  cursor: pointer;
+  color: inherit;
 }
 </style>

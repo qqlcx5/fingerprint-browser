@@ -65,6 +65,12 @@ function registerEnvChannels(): void {
   // T6 env:list：DB join 内存运行状态
   defineIpc(IPC.envList, (): EnvSummary[] => getEnvDao().listEnvs().map(toSummary))
 
+  // env:get 详情（编辑弹窗需要完整字段，含 hasPassword 标记；07 集成时补的契约）
+  defineIpc<IdInput, Env | null>(IPC.envGet, (input) => {
+    const r = getEnvDao().getEnv(input.id)
+    return r ? toEnv(r) : null
+  })
+
   // T1 env:create：校验 → 测代理取出口国家 → 生成指纹/对齐 → 落库+建目录
   defineIpc<EnvCreateInput, Env>(IPC.envCreate, async (input) => {
     const name = (input.name ?? '').trim()

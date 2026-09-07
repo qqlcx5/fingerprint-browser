@@ -37,6 +37,6 @@
 
 ## 当前进行中（每次开工更新，防止上下文丢失）
 
-- 当前状态：07-env-manager 完成，主进程全部模块（01–07）就绪，CRUD 全链路冒烟 PASS
-- 下一个：08-ui（渲染层，可用真实 api 联调）→ 09-packaging → 验收回归
-- 阻塞项：真实浏览器启动链路（内核下载后）随验收 1/2 覆盖
+- 当前状态：08-ui 完成，代码层面 01–08 全部就绪，CRUD 冒烟 PASS
+- 下一个：09-packaging（win 需在 Windows 上验证）→ 验收 1–9 回归 → 需求文档 IPC 表回写（env:get/align:confirm/app:notices/app:wipeData）
+- 阻塞项：界面观感与真实浏览器启动需人工验证（pnpm dev + 创建环境 + 启动）

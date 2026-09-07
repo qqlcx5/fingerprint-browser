@@ -189,6 +189,7 @@ export interface PingInfo {
 export const IPC = {
   appPing: 'app:ping',
   envList: 'env:list',
+  envGet: 'env:get',
   envCreate: 'env:create',
   envUpdate: 'env:update',
   envDelete: 'env:delete',
@@ -212,6 +213,7 @@ export type IpcChannel = (typeof IPC)[keyof typeof IPC]
 export const INVOKE_CHANNELS: IpcChannel[] = [
   IPC.appPing,
   IPC.envList,
+  IPC.envGet,
   IPC.envCreate,
   IPC.envUpdate,
   IPC.envDelete,
@@ -234,6 +236,7 @@ export type EventChannel =
 export interface IpcPayloadMap {
   [IPC.appPing]: undefined
   [IPC.envList]: undefined
+  [IPC.envGet]: IdInput
   [IPC.envCreate]: EnvCreateInput
   [IPC.envUpdate]: EnvUpdateInput
   [IPC.envDelete]: IdInput
@@ -251,6 +254,7 @@ export interface IpcPayloadMap {
 export interface IpcDataMap {
   [IPC.appPing]: PingInfo
   [IPC.envList]: EnvSummary[]
+  [IPC.envGet]: Env | null
   [IPC.envCreate]: Env
   [IPC.envUpdate]: Env
   [IPC.envDelete]: { id: string }
@@ -271,6 +275,8 @@ export interface IpcDataMap {
 export interface Api {
   ping(): Promise<Result<PingInfo>>
   envList(): Promise<Result<EnvSummary[]>>
+  /** 详情（含 proxyConfig 是否有密码）；不存在返回 null */
+  envGet(input: IdInput): Promise<Result<Env | null>>
   envCreate(input: EnvCreateInput): Promise<Result<Env>>
   envUpdate(input: EnvUpdateInput): Promise<Result<Env>>
   envDelete(input: IdInput): Promise<Result<{ id: string }>>

@@ -27,3 +27,57 @@ code {
   padding: 1px 4px;
   border-radius: 4px;
 }
+
+/* 全局按钮（弹窗/列表共用） */
+.btn {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.btn--danger {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.btn--danger-ghost {
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.btn--danger-ghost:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.btn--sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}

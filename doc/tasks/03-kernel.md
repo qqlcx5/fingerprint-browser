@@ -44,4 +44,10 @@
   - 冷启动全量：`ensureKernel()` 17.9s 完成 190MB 下载→解压→原子落位，`Google Chrome for Testing --version` → `153.0.8010.12` 真实可运行；二次调用快路径 0ms 命中 ready
   - 断点续传：预置 .part 前 8MB + 抹除安装目录 → 首个进度事件 `received=8400288`（从断点继续），末事件 received=total=190970181，安装后内核可运行，成功后 .part 已清理
   - 失败分类：镜像不可达（127.0.0.1:9）→ 2 轮轮换后抛 `KERNEL_DOWNLOAD_FAILED`（连接拒绝发生在写入前，无 .part 属预期）
-- **仍未验证（集成阶段补）**：Electron 主进程内 `registerKernelIpc()` 全链路（需 `pnpm exec electron`，本窗口禁跑）；磁盘真满现场复现（ENOSPC 分类为代码审阅级验证）
+- **真实 E2E 补充（2026-09-07 三次验证，全场景重放）**：
+  - 进度事件：全量重下采集样本，首事件 `{received:15473, total:190970181}`，末事件 `received=total=190970181`（与 CDN Content-Length 一字不差）✅
+  - 真实中断续传：下载 5s 后 `SIGKILL` 子进程，.part 落盘 55,008,901B；重跑首个进度事件 `received=55,025,285`（断点 +16KB 处继续，证明 Range 续传生效），最终安装成功 ✅
+  - 损坏检测引导重下：.part 灌 5MB 垃圾 → 解压期 zip 签名校验 `KERNEL_CORRUPT` → .part/staging 已清理 → 再次 ensure 全新下载 ready ✅
+  - 磁盘预检真实复现：hdiutil 挂 150MB 小卷作 userData → ensure 抛 `DISK_FULL`（"不足 2GB（当前约 0.1GB）"），未发起下载 ✅
+  - 断网可重试闭环：镜像不可达 → `KERNEL_DOWNLOAD_FAILED` → 恢复网络再 ensure → 下载安装 ready（验收 9）✅
+- **仍未验证（集成阶段补）**：Electron 主进程内 `registerKernelIpc()` 全链路（需 `pnpm exec electron`，本窗口禁跑）；下载写入期 ENOSPC→`DISK_FULL` 分支为代码审阅级验证（预检路径已真实验证）

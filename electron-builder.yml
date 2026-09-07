@@ -1,7 +1,12 @@
-appId: com.electron.app
-productName: fingerprint-browser
+# 09-packaging T1：electron-builder 基础配置
+# 与主进程约定：src/main/index.ts 中 setAppUserModelId('com.fingerprint-browser.app')，
+# appId 必须保持一致（Windows 通知/任务栏分组依赖 AUMID）。
+appId: com.fingerprint-browser.app
+productName: Fingerprint Browser
+copyright: Copyright © 2026 Fingerprint Browser
 directories:
   buildResources: build
+asar: true
 files:
   - '!**/.vscode/*'
   - '!src/*'
@@ -9,35 +14,57 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+# resources/** 解包到 app.asar.unpad：主进程以文件路径读取 icon 与随包文档
 asarUnpack:
   - resources/**
 win:
   executableName: fingerprint-browser
+  # TODO(签名)：内测阶段无代码签名证书，安装时会弹 SmartScreen 未签名提示；
+  # 正式分发前购买 OV/EV 证书后在此补 certificateSubjectName / signingHashAlgorithms。
+  target:
+    - nsis
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  # 向导式安装 + 许可协议页（build/license.txt，§1 合规：用途限制必须装机展示）
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  license: build/license.txt
+  runAfterFinish: true
+  # §8 卸载行为：卸载不删除 userData（保留登录态）；"彻底清除数据"走 app:wipeData 入口
+  deleteAppDataOnUninstall: false
 mac:
+  # TODO(签名/公证占位，T3)：无 Apple Developer 证书。identity: null 时不做正式签名，
+  # electron-builder 对 arm64 自动 ad-hoc 签名保证本机可运行；分发需自行处理 Gatekeeper 提示。
+  # 取得证书后：填 identity（或 CSC_NAME 环境变量）、notarize: true + APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID。
+  identity: null
+  notarize: false
+  target:
+    - dmg
+  category: public.app-category.productivity
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  notarize: false
 dmg:
   artifactName: ${name}-${version}.${ext}
+# §7 注：Linux 兼容不在 M3 验收范围，仅保留 target 配置
 linux:
   target:
     - AppImage
-    - snap
     - deb
-  maintainer: electronjs.org
+  maintainer: fingerprint-browser
   category: Utility
 appImage:
   artifactName: ${name}-${version}.${ext}
+# 原生模块（better-sqlite3）已在 postinstall 由 install-app-deps 按 Electron ABI 重编，
+# 打包阶段不再重复 rebuild；可用 pnpm exec electron scripts/check-native.cjs 在包内验证
 npmRebuild: false
+# P2 自动更新占位（electron-updater 已预装）；正式发布前替换为真实更新源
 publish:
   provider: generic
   url: https://example.com/auto-updates

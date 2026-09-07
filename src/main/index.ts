@@ -72,7 +72,8 @@ async function runSmoke(): Promise<void> {
       nodeIntegration: false
     }
   })
-  await win.loadFile(join(__dirname, '../renderer/index.html'))
+  // 用 about:blank 而非应用页面：避免 KernelGate 自动触发内核下载（300MB）
+  await win.loadURL('about:blank')
   const res = await win.webContents.executeJavaScript(
     `(async () => {
       const ping = await window.api.ping()

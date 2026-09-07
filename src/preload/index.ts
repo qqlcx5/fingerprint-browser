@@ -18,6 +18,7 @@ function subscribe<T>(channel: string, cb: (data: T) => void): () => void {
 const api: Api = {
   ping: () => ipcRenderer.invoke(IPC.appPing),
   envList: () => ipcRenderer.invoke(IPC.envList),
+  envGet: (input) => ipcRenderer.invoke(IPC.envGet, input),
   envCreate: (input) => ipcRenderer.invoke(IPC.envCreate, input),
   envUpdate: (input) => ipcRenderer.invoke(IPC.envUpdate, input),
   envDelete: (input) => ipcRenderer.invoke(IPC.envDelete, input),

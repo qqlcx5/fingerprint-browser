@@ -14,7 +14,10 @@ const { notices, dismiss } = useNotices()
   <div class="app">
     <div v-if="notices.length" class="banners">
       <div v-for="n in notices" :key="n.kind" class="banner banner--warn">
-        <span>{{ n.message }}</span>
+        <span class="banner__msg">
+          <span class="icon-[lucide--triangle-alert]"></span>
+          {{ n.message }}
+        </span>
         <button class="banner__x" type="button" @click="dismiss(n.kind)">×</button>
       </div>
     </div>
@@ -44,6 +47,11 @@ const { notices, dismiss } = useNotices()
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 13px;
+}
+.banner__msg {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .banner--warn {
   background: #fef3c7;

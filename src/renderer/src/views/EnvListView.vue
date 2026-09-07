@@ -94,9 +94,13 @@ async function onDelete(): Promise<void> {
           title="清除全部环境数据（内核与日志保留）"
           @click="deleting = { id: '__all__', name: '全部环境数据' } as unknown as EnvSummary"
         >
+          <span class="icon-[lucide--trash-2]"></span>
           彻底清除数据
         </button>
-        <button class="btn btn--primary" type="button" @click="openCreate">+ 创建环境</button>
+        <button class="btn btn--primary" type="button" @click="openCreate">
+          <span class="icon-[lucide--plus]"></span>
+          创建环境
+        </button>
       </div>
     </header>
 
@@ -105,7 +109,10 @@ async function onDelete(): Promise<void> {
     <div v-else-if="rows.length === 0" class="empty">
       <p>还没有环境。</p>
       <p class="muted">每个环境 = 独立浏览器数据 + 独立代理 + 独立指纹，互不串号。</p>
-      <button class="btn btn--primary" type="button" @click="openCreate">创建第一个环境</button>
+      <button class="btn btn--primary" type="button" @click="openCreate">
+        <span class="icon-[lucide--plus]"></span>
+        创建第一个环境
+      </button>
     </div>
 
     <table v-else class="table">
@@ -138,6 +145,7 @@ async function onDelete(): Promise<void> {
               :disabled="busyId === e.id"
               @click="onStart(e)"
             >
+              <span class="icon-[lucide--play]"></span>
               启动
             </button>
             <button
@@ -147,6 +155,7 @@ async function onDelete(): Promise<void> {
               :disabled="busyId === e.id"
               @click="onStop(e)"
             >
+              <span class="icon-[lucide--square]"></span>
               停止
             </button>
             <span v-else class="muted">…</span>
@@ -156,6 +165,7 @@ async function onDelete(): Promise<void> {
               :disabled="e.status !== 'idle'"
               @click="openEdit(e)"
             >
+              <span class="icon-[lucide--pencil]"></span>
               编辑
             </button>
             <button
@@ -164,6 +174,7 @@ async function onDelete(): Promise<void> {
               :disabled="e.status !== 'idle'"
               @click="deleting = e"
             >
+              <span class="icon-[lucide--trash-2]"></span>
               删除
             </button>
           </td>

@@ -6,7 +6,13 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/types'
 import { defineIpc, registerIpc } from './ipc'
 import { setupStorage, closeStorage, getEnvDao } from './db'
-import { getActiveEnvIds, initStatuses, cleanupOrphanChromium, stopAllRunning } from './launcher'
+import {
+  initStatuses,
+  cleanupOrphanChromium,
+  stopAllRunning,
+  getActiveEnvIds,
+  getContext
+} from './launcher'
 import { registerEnvManagerIpc, pushNotice } from './envManager'
 import { registerKernelIpc } from './kernel'
 import { registerProxyIpc } from './proxy'
@@ -103,6 +109,95 @@ async function runSmoke(): Promise<void> {
   console.log('E2E_PROXY_VALIDATION', JSON.stringify(res.invalidProxy))
   console.log('E2E_STATUS', JSON.stringify(res.status))
   console.log('E2E_NOTICES', JSON.stringify(res.notices))
+
+  let kernelFailureOk = true
+  if (process.env['E2E_KERNEL_FAILURE'] === '1') {
+    const failures = await win.webContents.executeJavaScript(
+      `(async () => [await window.api.browserEnsure(), await window.api.browserEnsure()])()`
+    )
+    kernelFailureOk = failures.every(
+      (result) => !result.ok && result.error.code === 'KERNEL_DOWNLOAD_FAILED'
+    )
+    console.log('E2E_KERNEL_FAILURE', JSON.stringify(failures))
+  }
+
+  let runtimeOk = true
+  if (process.env['E2E_RUNTIME'] === '1') {
+    const count = Math.max(1, Math.min(10, Number(process.env['E2E_RUNTIME_COUNT'] ?? '1')))
+    const runtime = await win.webContents.executeJavaScript(
+      `(async () => {
+        const created = await Promise.all(
+          Array.from({ length: ${count} }, (_, i) => window.api.envCreate({ name: 'runtime-' + i }))
+        )
+        if (created.some((r) => !r.ok)) return { ok: false, phase: 'create' }
+        const ids = created.map((r) => r.data.id)
+        const startedAt = Date.now()
+        const started = await Promise.all(ids.map((id) => window.api.envStart({ id })))
+        const status = await window.api.envStatus()
+        return { ok: started.every((r) => r.ok), ids, status, launchMs: Date.now() - startedAt }
+      })()`
+    )
+    let cookiePersisted = false
+    let windowCloseIdle = false
+    if (runtime.ok && runtime.ids.length > 0) {
+      const id = runtime.ids[0] as string
+      const first = getContext(id)
+      if (first) {
+        await first.addCookies([
+          {
+            name: 'fp_e2e',
+            value: 'persisted',
+            domain: 'example.com',
+            path: '/',
+            expires: Math.floor(Date.now() / 1_000) + 3_600
+          }
+        ])
+        await first.close() // 等价于用户关闭该环境的最后一个浏览器窗口
+        const afterClose = await win.webContents.executeJavaScript(
+          `window.api.envStatus().then((r) => r)`
+        )
+        windowCloseIdle = afterClose.ok && afterClose.data[id] === 'idle'
+        const restarted = await win.webContents.executeJavaScript(
+          `window.api.envStart({ id: ${JSON.stringify(id)} })`
+        )
+        const second = getContext(id)
+        cookiePersisted =
+          restarted.ok &&
+          !!second &&
+          (await second.cookies('https://example.com')).some(
+            (cookie) => cookie.name === 'fp_e2e' && cookie.value === 'persisted'
+          )
+      }
+    }
+    const holdMs = Math.max(0, Number(process.env['E2E_RUNTIME_HOLD_MS'] ?? '0'))
+    if (holdMs > 0) await new Promise((resolve) => setTimeout(resolve, holdMs))
+    const stopped = await win.webContents.executeJavaScript(
+      `(async () => {
+        const ids = ${JSON.stringify(runtime.ids ?? [])}
+        await Promise.all(ids.map((id) => window.api.envStop({ id })))
+        return window.api.envStatus()
+      })()`
+    )
+    const allIdle = stopped.ok && Object.values(stopped.data).every((status) => status === 'idle')
+    runtimeOk =
+      runtime.ok &&
+      runtime.status.ok &&
+      runtime.ids.every((id: string) => runtime.status.data[id] === 'running') &&
+      windowCloseIdle &&
+      cookiePersisted &&
+      allIdle
+    console.log(
+      'E2E_RUNTIME',
+      JSON.stringify({
+        count,
+        launchMs: runtime.launchMs,
+        started: runtime.ok,
+        windowCloseIdle,
+        cookiePersisted,
+        allIdle
+      })
+    )
+  }
   const pingOk = res.ping.ok && res.ping.data.pong === true && res.ping.data.sqlite === true
   const crudOk =
     res.created.ok &&
@@ -114,8 +209,11 @@ async function runSmoke(): Promise<void> {
     res.status.ok &&
     Object.values(res.status.data).every((s) => s === 'idle')
   const proxyValidationOk = !res.invalidProxy.ok && res.invalidProxy.error.code === 'VALIDATION'
-  console.log('E2E_RESULT', pingOk && crudOk && proxyValidationOk ? 'PASS' : 'FAIL')
-  app.exit(pingOk && crudOk && proxyValidationOk ? 0 : 1)
+  console.log(
+    'E2E_RESULT',
+    pingOk && crudOk && proxyValidationOk && kernelFailureOk && runtimeOk ? 'PASS' : 'FAIL'
+  )
+  app.exit(pingOk && crudOk && proxyValidationOk && kernelFailureOk && runtimeOk ? 0 : 1)
 }
 
 app.whenReady().then(() => {

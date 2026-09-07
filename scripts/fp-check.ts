@@ -24,6 +24,7 @@
  *   FP_CHECK_COUNTRY   目标国家（默认 US，测对齐字段与 locale 一致性）
  *   FP_CHECK_OFFLINE   =1 时跳过浏览器启动，只做纯逻辑断言（生成/对齐/冻结/差异/注入确定性）
  *   FP_CHECK_CHROMIUM  显式指定 Chromium 可执行文件（03 内核落地后可指向 userData/chromium/{rev}/...）
+ *   FP_CHECK_URL       两次启动都访问的页面（默认 about:blank；可设 browserleaks/creepjs）
  *
  * 浏览器二进制缺失时：`pnpm exec playwright-core install chromium` 或等 03 内核就绪。
  */
@@ -241,7 +242,8 @@ async function launchOnce(
   try {
     await injectFingerprint(context, core)
     const page = await context.newPage()
-    await page.goto('about:blank')
+    const url = process.env.FP_CHECK_URL ?? 'about:blank'
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
     return await page.evaluate(readMetrics)
   } finally {
     await context.close()

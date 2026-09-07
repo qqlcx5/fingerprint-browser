@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { toasts } from '../lib/toast'
+
+const kindIcon: Record<string, string> = {
+  success: 'icon-[lucide--check-circle]',
+  error: 'icon-[lucide--alert-circle]',
+  info: 'icon-[lucide--info]'
+}
 </script>
 
 <template>
   <div class="toast-host" aria-live="polite">
     <div v-for="t in toasts" :key="t.id" class="toast" :class="`toast--${t.kind}`">
+      <span :class="kindIcon[t.kind]"></span>
       {{ t.text }}
     </div>
   </div>

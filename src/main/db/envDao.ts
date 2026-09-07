@@ -33,6 +33,7 @@ export interface EnvRecord {
   id: string
   name: string
   remark: string
+  group: string
   fingerprint: ReadonlyCoreFingerprint
   alignFields: AlignFields
   proxyConfig: StoredProxyConfig | null
@@ -45,6 +46,7 @@ export interface EnvRecord {
 export interface EnvDraft {
   name: string
   remark: string
+  group?: string
   fingerprint: ReadonlyCoreFingerprint
   alignFields: AlignFields
   proxyConfig?: ProxyConfig | null
@@ -54,6 +56,7 @@ export interface EnvDraft {
 export interface EnvChanges {
   name?: string
   remark?: string
+  group?: string
   /** 代理整体替换；null = 清除代理；undefined = 不变。密码在落库前加密 */
   proxyConfig?: ProxyConfig | null
   /** 仅 align:confirm 确认流（07-T3）可更新对齐字段 */
@@ -77,6 +80,7 @@ interface EnvRow {
   id: string
   name: string
   remark: string
+  group_name: string
   fingerprint: string
   align_fields: string
   proxy_config: string | null
@@ -88,10 +92,10 @@ interface EnvRow {
 export function createEnvDao(db: Database.Database): EnvDao {
   const insert = db.prepare(
     `INSERT INTO environments
-       (id, name, remark, fingerprint, align_fields, proxy_config,
+       (id, name, remark, group_name, fingerprint, align_fields, proxy_config,
         created_at, updated_at, last_launched_at)
      VALUES
-       (@id, @name, @remark, @fingerprint, @align_fields, @proxy_config,
+       (@id, @name, @remark, @group_name, @fingerprint, @align_fields, @proxy_config,
         @created_at, @updated_at, @last_launched_at)`
   )
   const selectById = db.prepare('SELECT * FROM environments WHERE id = ?')
@@ -107,6 +111,7 @@ export function createEnvDao(db: Database.Database): EnvDao {
       id: randomUUID(),
       name: draft.name,
       remark: draft.remark ?? '',
+      group: draft.group?.trim() ?? '',
       fingerprint: draft.fingerprint,
       alignFields: draft.alignFields,
       proxyConfig: draft.proxyConfig ? sealProxy(draft.proxyConfig) : null,
@@ -141,6 +146,10 @@ export function createEnvDao(db: Database.Database): EnvDao {
     if (changes.remark !== undefined) {
       sets.push('remark = ?')
       values.push(changes.remark)
+    }
+    if (changes.group !== undefined) {
+      sets.push('group_name = ?')
+      values.push(changes.group.trim())
     }
     if (changes.proxyConfig !== undefined) {
       sets.push('proxy_config = ?')
@@ -189,6 +198,7 @@ function recordToRow(record: EnvRecord): Record<string, unknown> {
     id: record.id,
     name: record.name,
     remark: record.remark,
+    group_name: record.group,
     fingerprint: JSON.stringify(record.fingerprint),
     align_fields: JSON.stringify(record.alignFields),
     proxy_config: record.proxyConfig ? JSON.stringify(record.proxyConfig) : null,
@@ -214,6 +224,7 @@ function rowToRecord(row: EnvRow): EnvRecord {
     id: row.id,
     name: row.name,
     remark: row.remark,
+    group: row.group_name ?? '',
     fingerprint: parseJson(row.fingerprint, 'fingerprint', row.id) as ReadonlyCoreFingerprint,
     alignFields: parseJson(row.align_fields, 'align_fields', row.id) as AlignFields,
     proxyConfig,

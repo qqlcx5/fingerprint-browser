@@ -83,6 +83,7 @@ async function runSmoke(): Promise<void> {
   const res = await win.webContents.executeJavaScript(
     `(async () => {
       const ping = await window.api.ping()
+      const list0 = await window.api.envList()
       const created = await window.api.envCreate({ name: 'smoke-env' })
       const invalidProxy = await window.api.envCreate({
         name: 'invalid-proxy',
@@ -93,7 +94,7 @@ async function runSmoke(): Promise<void> {
       const list2 = await window.api.envList()
       const status = await window.api.envStatus()
       const notices = await window.api.appNotices()
-      return { ping, created, invalidProxy, list1, del, list2, status, notices }
+      return { ping, list0, created, invalidProxy, list1, del, list2, status, notices }
     })()`
   )
   console.log('E2E_PING', JSON.stringify(res.ping))
@@ -101,6 +102,7 @@ async function runSmoke(): Promise<void> {
     'E2E_CRUD',
     JSON.stringify({
       created: res.created.ok,
+      list0Count: res.list0.ok ? res.list0.data.length : -1,
       list1Count: res.list1.ok ? res.list1.data.length : -1,
       deleted: res.del.ok,
       list2Count: res.list2.ok ? res.list2.data.length : -1
@@ -212,22 +214,135 @@ async function runSmoke(): Promise<void> {
       })
     )
   }
+  let persistenceOk = true
+  const persistencePhase = process.env['E2E_PERSIST_PHASE']
+  if (persistencePhase === 'write') {
+    const persisted = await win.webContents.executeJavaScript(
+      `(async () => {
+        const created = await window.api.envCreate({ name: 'persist-env' })
+        if (!created.ok) return created
+        const started = await window.api.envStart({ id: created.data.id })
+        return { created, started }
+      })()`
+    )
+    const id = persisted.created?.ok ? persisted.created.data.id : null
+    const context = id ? getContext(id) : undefined
+    if (persisted.started?.ok && context) {
+      await context.addCookies([
+        {
+          name: 'fp_restart',
+          value: 'persisted',
+          domain: 'example.com',
+          path: '/',
+          expires: Math.floor(Date.now() / 1_000) + 3_600
+        }
+      ])
+      await win.webContents.executeJavaScript(`window.api.envStop({ id: ${JSON.stringify(id)} })`)
+    }
+    persistenceOk = !!id && persisted.started?.ok && !!context
+    console.log('E2E_PERSIST_WRITE', JSON.stringify({ id, ok: persistenceOk }))
+  } else if (persistencePhase === 'verify') {
+    const persisted = await win.webContents.executeJavaScript(
+      `(async () => {
+        const listed = await window.api.envList()
+        if (!listed.ok) return listed
+        const env = listed.data.find((item) => item.name === 'persist-env')
+        if (!env) return { ok: false, error: { code: 'NOT_FOUND' } }
+        const started = await window.api.envStart({ id: env.id })
+        return { listed, env, started }
+      })()`
+    )
+    const id = persisted.env?.id as string | undefined
+    const context = id ? getContext(id) : undefined
+    const cookiePersisted =
+      persisted.started?.ok &&
+      !!context &&
+      (await context.cookies('https://example.com')).some(
+        (cookie) => cookie.name === 'fp_restart' && cookie.value === 'persisted'
+      )
+    if (id) await win.webContents.executeJavaScript(`window.api.envStop({ id: ${JSON.stringify(id)} })`)
+    persistenceOk = !!id && cookiePersisted
+    console.log('E2E_PERSIST_VERIFY', JSON.stringify({ id, cookiePersisted }))
+  }
+
+  let wipeOk = true
+  if (process.env['E2E_WIPE'] === '1') {
+    const wiped = await win.webContents.executeJavaScript(
+      `(async () => {
+        const before = await window.api.envList()
+        const result = await window.api.appWipeData()
+        const after = await window.api.envList()
+        const kernel = await window.api.browserEnsure()
+        return { before, result, after, kernel }
+      })()`
+    )
+    wipeOk =
+      wiped.before.ok &&
+      wiped.before.data.length > 0 &&
+      wiped.result.ok &&
+      wiped.after.ok &&
+      wiped.after.data.length === 0 &&
+      wiped.kernel.ok &&
+      wiped.kernel.data.ready
+    console.log('E2E_WIPE', JSON.stringify(wiped))
+  }
+
+  let crashOk = true
+  if (process.env['E2E_CRASH'] === '1') {
+    await win.webContents.executeJavaScript(
+      `window.__fpCrashes = []; window.__fpCrashOff = window.api.onCrashed((info) => window.__fpCrashes.push(info)); undefined`
+    )
+    const crashed = await win.webContents.executeJavaScript(
+      `(async () => {
+        const created = await window.api.envCreate({ name: 'crash-env' })
+        if (!created.ok) return created
+        const started = await window.api.envStart({ id: created.data.id })
+        return { created, started }
+      })()`
+    )
+    const id = crashed.created?.ok ? crashed.created.data.id : null
+    const context = id ? getContext(id) : undefined
+    if (crashed.started?.ok && context) {
+      const page = context.pages()[0] ?? (await context.newPage())
+      const session = await context.newCDPSession(page)
+      void session.send('Page.crash').catch(() => {})
+      await new Promise((resolve) => setTimeout(resolve, 1_000))
+    }
+    const crashState = await win.webContents.executeJavaScript(
+      `(async () => ({ status: await window.api.envStatus(), events: window.__fpCrashes ?? [] }))()`
+    )
+    crashOk =
+      !!id &&
+      crashed.started?.ok &&
+      crashState.status.ok &&
+      crashState.status.data[id] === 'idle' &&
+      crashState.events.some((event) => event.envId === id)
+    console.log('E2E_CRASH', JSON.stringify({ id, crashOk, crashState }))
+  }
+
   const pingOk = res.ping.ok && res.ping.data.pong === true && res.ping.data.sqlite === true
   const crudOk =
     res.created.ok &&
     res.del.ok &&
+    res.list0.ok &&
     res.list1.ok &&
-    res.list1.data.length === 1 &&
+    res.list1.data.length === res.list0.data.length + 1 &&
     res.list2.ok &&
-    res.list2.data.length === 0 &&
+    res.list2.data.length === res.list0.data.length &&
     res.status.ok &&
     Object.values(res.status.data).every((s) => s === 'idle')
   const proxyValidationOk = !res.invalidProxy.ok && res.invalidProxy.error.code === 'VALIDATION'
   console.log(
     'E2E_RESULT',
-    pingOk && crudOk && proxyValidationOk && kernelFailureOk && runtimeOk ? 'PASS' : 'FAIL'
+    pingOk && crudOk && proxyValidationOk && kernelFailureOk && runtimeOk && persistenceOk && wipeOk && crashOk
+      ? 'PASS'
+      : 'FAIL'
   )
-  app.exit(pingOk && crudOk && proxyValidationOk && kernelFailureOk && runtimeOk ? 0 : 1)
+  app.exit(
+    pingOk && crudOk && proxyValidationOk && kernelFailureOk && runtimeOk && persistenceOk && wipeOk && crashOk
+      ? 0
+      : 1
+  )
 }
 
 app.whenReady().then(() => {
@@ -253,7 +368,10 @@ app.whenReady().then(() => {
   // 存储层需在 registerIpc() 前就绪（db/index.ts 约定）
   // 冒烟模式用临时 userData，不碰用户真实数据（需在任何存储初始化前设置）
   if (process.env['E2E_SMOKE'] === '1') {
-    app.setPath('userData', join(tmpdir(), `fp-smoke-${Date.now()}`))
+    app.setPath(
+      'userData',
+      process.env['E2E_USER_DATA'] ?? join(tmpdir(), `fp-smoke-${Date.now()}`)
+    )
   }
 
   const storage = setupStorage()

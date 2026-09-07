@@ -30,6 +30,9 @@ const api: Api = {
   alignConfirm: (input) => ipcRenderer.invoke(IPC.alignConfirm, input),
   appNotices: () => ipcRenderer.invoke(IPC.appNotices),
   appWipeData: () => ipcRenderer.invoke(IPC.appWipeData),
+  envExport: () => ipcRenderer.invoke(IPC.envExport),
+  envImport: () => ipcRenderer.invoke(IPC.envImport),
+  appLogs: () => ipcRenderer.invoke(IPC.appLogs),
   onStatusChanged: (cb: (status: EnvStatusMap) => void) =>
     subscribe<EnvStatusMap>(IPC.envStatusChanged, cb),
   onCrashed: (cb: (info: CrashedInfo) => void) => subscribe<CrashedInfo>(IPC.envCrashed, cb),

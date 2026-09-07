@@ -4,6 +4,10 @@
  * 数据流：渲染层 → 这里（校验/编排）→ db / launcher / fingerprint / proxy。
  * 错误：下层业务错误（code 已定）原样透传；本层校验失败抛 VALIDATION/NOT_FOUND/ENV_RUNNING。
  */
+import { readFileSync } from 'fs'
+import { join } from 'path'
+import { logsDir } from '../../shared/paths'
+import { exportEnvs, importEnvs } from './transfer'
 import { defineIpc, fail } from '../ipc'
 import { IPC } from '../../shared/types'
 import type {
@@ -37,6 +41,7 @@ function toEnv(r: EnvRecord): Env {
     id: r.id,
     name: r.name,
     remark: r.remark,
+    group: r.group,
     fingerprint: r.fingerprint,
     alignFields: r.alignFields,
     proxyConfig: r.proxyConfig ? toPublicProxy(r.proxyConfig) : null,
@@ -52,6 +57,7 @@ function toSummary(r: EnvRecord): EnvSummary {
     id: r.id,
     name: r.name,
     remark: r.remark,
+    group: r.group,
     status: getStatus(r.id),
     proxySummary: p ? `${p.type}://${p.host}:${p.port}` : null,
     lastLaunchedAt: r.lastLaunchedAt
@@ -95,6 +101,7 @@ function registerEnvChannels(): void {
     const record = createEnvWithDirs(dao, {
       name,
       remark: input.remark ?? '',
+      group: input.group ?? '',
       fingerprint: generateCoreFingerprint(country),
       alignFields: alignFieldsForCountry(country),
       proxyConfig
@@ -111,6 +118,7 @@ function registerEnvChannels(): void {
       changes.name = name
     }
     if (input.remark !== undefined) changes.remark = input.remark
+    if (input.group !== undefined) changes.group = input.group
     if (input.proxyConfig !== undefined) {
       changes.proxyConfig =
         input.proxyConfig === null ? null : validateProxyConfig(input.proxyConfig)
@@ -167,6 +175,20 @@ function registerAppChannels(): void {
 
   // T8 app:wipeData：彻底清除数据（停环境 → 删 db+envs → 重建空库）
   defineIpc(IPC.appWipeData, () => wipeAllData())
+
+  defineIpc(IPC.envExport, () => exportEnvs())
+  defineIpc(IPC.envImport, () => importEnvs())
+  defineIpc(IPC.appLogs, () => {
+    try {
+      const lines = readFileSync(join(logsDir(), 'main.log'), 'utf8')
+        .trim()
+        .split('\n')
+        .slice(-300)
+      return { lines }
+    } catch {
+      return { lines: [] }
+    }
+  })
 }
 
 /** 集成入口：src/main/index.ts 在 registerIpc() 之前调用一次 */

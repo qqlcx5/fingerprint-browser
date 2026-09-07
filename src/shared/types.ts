@@ -97,6 +97,7 @@ export interface Env {
   id: string
   name: string
   remark: string
+  group: string
   fingerprint: ReadonlyCoreFingerprint
   alignFields: AlignFields
   proxyConfig: PublicProxyConfig | null
@@ -110,6 +111,7 @@ export interface EnvSummary {
   id: string
   name: string
   remark: string
+  group: string
   status: EnvStatus
   /** 如 'socks5://1.2.3.4:1080'；无代理（直连）为 null */
   proxySummary: string | null
@@ -119,6 +121,7 @@ export interface EnvSummary {
 export interface EnvCreateInput {
   name: string
   remark?: string
+  group?: string
   proxyConfig?: ProxyConfig | null
 }
 
@@ -126,6 +129,7 @@ export interface EnvUpdateInput {
   id: string
   name?: string
   remark?: string
+  group?: string
   proxyConfig?: ProxyConfig | null
 }
 
@@ -176,6 +180,22 @@ export interface StartupNotice {
   message: string
 }
 
+export interface EnvTransfer {
+  version: 1
+  environments: Array<{
+    name: string
+    remark: string
+    group: string
+    fingerprint: CoreFingerprint
+    alignFields: AlignFields
+    proxyConfig: PublicProxyConfig | null
+  }>
+}
+
+export interface LogSnapshot {
+  lines: string[]
+}
+
 /** 骨架自检通道返回（better-sqlite3 原生模块可用性） */
 export interface PingInfo {
   pong: true
@@ -201,6 +221,9 @@ export const IPC = {
   alignConfirm: 'align:confirm',
   appNotices: 'app:notices',
   appWipeData: 'app:wipeData',
+  envExport: 'env:export',
+  envImport: 'env:import',
+  appLogs: 'app:logs',
   // 以下为主进程 → 渲染层事件（非 invoke）
   envStatusChanged: 'env:status-changed',
   envCrashed: 'env:crashed',
@@ -224,7 +247,10 @@ export const INVOKE_CHANNELS: IpcChannel[] = [
   IPC.browserEnsure,
   IPC.alignConfirm,
   IPC.appNotices,
-  IPC.appWipeData
+  IPC.appWipeData,
+  IPC.envExport,
+  IPC.envImport,
+  IPC.appLogs
 ]
 
 export type EventChannel =
@@ -248,6 +274,9 @@ export interface IpcPayloadMap {
   [IPC.alignConfirm]: AlignConfirmInput
   [IPC.appNotices]: undefined
   [IPC.appWipeData]: undefined
+  [IPC.envExport]: undefined
+  [IPC.envImport]: undefined
+  [IPC.appLogs]: undefined
 }
 
 /** invoke 通道 → 返回数据类型 */
@@ -267,6 +296,9 @@ export interface IpcDataMap {
   [IPC.appNotices]: StartupNotice[]
   /** 清除的环境数据目录数（db + envs/，内核与日志保留） */
   [IPC.appWipeData]: { wipedEnvs: number }
+  [IPC.envExport]: { count: number; path: string | null }
+  [IPC.envImport]: { count: number; path: string | null }
+  [IPC.appLogs]: LogSnapshot
 }
 
 // ---------- 渲染层入口 ----------
@@ -291,6 +323,9 @@ export interface Api {
   appNotices(): Promise<Result<StartupNotice[]>>
   /** 彻底清除数据（§8）：关停全部环境 → 删 db + envs/；内核与日志保留；二次确认由 UI 做 */
   appWipeData(): Promise<Result<{ wipedEnvs: number }>>
+  envExport(): Promise<Result<{ count: number; path: string | null }>>
+  envImport(): Promise<Result<{ count: number; path: string | null }>>
+  appLogs(): Promise<Result<LogSnapshot>>
   /** 订阅环境状态变化，返回取消订阅函数 */
   onStatusChanged(cb: (status: EnvStatusMap) => void): () => void
   /** 订阅环境崩溃通知（含退出码），返回取消订阅函数 */

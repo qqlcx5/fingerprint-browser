@@ -12,6 +12,7 @@ const isEdit = !!props.env?.id
 const form = reactive({
   name: props.env?.name ?? '',
   remark: props.env?.remark ?? '',
+  group: props.env?.group ?? '',
   type: 'socks5' as ProxyType,
   host: '',
   port: '',
@@ -93,7 +94,12 @@ async function onSave(): Promise<void> {
     }
   }
   busy.value = true
-  const payload = { name, remark: form.remark.trim(), proxyConfig }
+  const payload = {
+    name,
+    remark: form.remark.trim(),
+    group: form.group.trim(),
+    proxyConfig
+  }
   const res =
     isEdit && props.env
       ? await window.api.envUpdate({ id: props.env.id, ...payload })
@@ -125,6 +131,10 @@ async function onSave(): Promise<void> {
       <label class="field">
         <span>备注</span>
         <input v-model="form.remark" type="text" placeholder="可选" />
+      </label>
+      <label class="field">
+        <span>分组</span>
+        <input v-model="form.group" type="text" placeholder="如：北美店铺" />
       </label>
       <label class="field field--row">
         <input v-model="form.useProxy" type="checkbox" @change="markDirty" />

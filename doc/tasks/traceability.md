@@ -1,16 +1,15 @@
 # 需求↔任务追溯矩阵（对抗式审查产物）
 
-> 生成：2026-09-07 对抗式审查，对照 `需求文档.md` v1.1 逐条核对。
+> 生成：2026-09-07 对抗式审查；2026-09-08 按 `需求文档.md` v1.2、实际 IPC 和验收结果回写。
 > 用法：每个需求条款 → 唯一认领任务。任务完成后在此回查，验收前按本矩阵逐行打勾，防止漏项。
-> 结论：P0 全覆盖；P1/P2 登记于 progress.md「P1/P2 待办」，暂不拆任务。
-> 标注 **（审查补）** 的条目为本次审查新增/修订；阶段 0（01）已由并行 agent 完成并冒烟通过。
+> 结论：P0 代码已覆盖；真实验收以 `09-packaging.md` 附录 A 为准。P1/P2 登记于 progress.md「P1/P2 待办」，暂不作为当前发布阻塞。
 
 ## 显式契约决策记录（偏离/澄清需求文档处，验收时按此口径）
 
 1. **EgressInfo 形状**：需求 §4 写 `{ok, ip?, country?, latencyMs?, code?}`（允许部分成功）；实现收敛为 Result 信封 + 三字段全必填（all-or-nothing：任一查询失败即整体失败）。语义更严格，04 实现按此口径。
 2. **国家变更检测时机**：需求 §6.5 未明确在"改代理时"还是"启动时"弹窗（2026-09-07 决策）：收敛到 env:start——启动前本就强制 proxy:test，避免编辑时重复测代理；`envStart → CountryChangeInfo|null` + `align:confirm` 端到端承载。
 3. **wipeData 语义**：清环境数据（db + envs/），内核与日志保留（避免用户误操作后重下 300MB 内核）。
-4. **align:confirm / app:ping / app:notices / app:wipeData / env:crashed** 均为需求 §4 之外新增通道，需求文档下版需回写。
+4. **align:confirm / app:ping / app:notices / app:wipeData / env:crashed** 为需求 §4 之外的实现增量，已回写至需求文档 v1.2。`env:crashed` 仅可靠报告页面 `crash` 与启动期 context 异常关闭，exitCode 为 null；运行中整个 Chromium 进程退出仍按用户关窗语义处理。
 
 ## §4 IPC 契约（invoke + event）
 
@@ -30,7 +29,7 @@
 | app:notices | invoke | 07-T9（审查补·二次） | 拉取式启动通知：db_reset / weak_encryption（产生早于渲染层订阅，事件会丢故用拉取） |
 | app:wipeData | invoke | 07-T8（审查补） | 已入冻结 types.ts（2026-09-07 契约增量） |
 | env:status-changed | event | 06-T1 | |
-| env:crashed | event | 06-T6（审查补·二次） | CrashedInfo{envId, exitCode}；已入冻结 types.ts |
+| env:crashed | event | 06-T6（审查补·二次） | 页面 crash / 启动期 context 异常关闭；`CrashedInfo{envId, exitCode:null}` |
 | browser:download-progress | event | 03-T4 | |
 
 ## §5 数据模型与存储
@@ -40,7 +39,7 @@
 | environments 表字段与索引 | 02-T2 |
 | 运行状态不入库、启动置 idle | 06-T1 |
 | data/envs.db | 02-T1/T2 |
-| envs/{id}/profile + envs/{id}/downloads | 02-T1/T5；下载目录落地 06-T2（CDP setDownloadBehavior，审查补） |
+| envs/{id}/profile + envs/{id}/downloads | 02-T1/T5；下载目录落地 06-T2（Playwright `downloadsPath`） |
 | chromium/{revision}，revision 来源 browsers.json | 02-T1；03-T1（审查补） |
 | logs/ 滚动 5MB×5 | 02-T6（审查补） |
 | 代理密码 safeStorage 加密、weak 降级 | 02-T4；降级提示 08-T4 |
@@ -55,7 +54,7 @@
 | 6.3 环境隔离（userDataDir + 下载目录） | 02-T5；06-T2 |
 | 6.4 代理配置、四类错误区分、直连标注 | 04-T1~T5；直连标注 08-T2（审查补） |
 | 6.5 指纹两段式（生成/只读/对齐跟随/变更确认/locale 一致性） | 05-T1~T4；创建时国家来源 07-T1（审查补）；确认流 07-T3；弹窗 08-T7 |
-| 6.6 生命周期（流水线/关窗即停/退出逐个停止/孤儿清理/随机端口） | 06-T2/T3/T4/T5；应用退出钩子 06-T7（审查补） |
+| 6.6 生命周期（流水线/关窗即停/退出逐个停止/孤儿清理/pipe 通信） | 06-T2/T3/T4/T5；应用退出钩子 06-T7（审查补） |
 | 6.7 ≥10 并行 + 状态事件推送（非轮询） | 06-T1/T2；08-T2；量化回归 09-T5 |
 
 ## §7 非功能

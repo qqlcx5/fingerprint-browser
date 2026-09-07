@@ -70,6 +70,7 @@ const SCHEMA = `
     id                TEXT PRIMARY KEY NOT NULL,
     name              TEXT NOT NULL,
     remark            TEXT NOT NULL DEFAULT '',
+    group_name        TEXT NOT NULL DEFAULT '',
     fingerprint       TEXT NOT NULL,
     align_fields      TEXT NOT NULL,
     proxy_config      TEXT,
@@ -83,6 +84,11 @@ const SCHEMA = `
 
 function migrate(db: Database.Database): void {
   db.exec(SCHEMA)
+  const columns = db.pragma('table_info(environments)') as Array<{ name: string }>
+  if (!columns.some((column) => column.name === 'group_name')) {
+    db.exec("ALTER TABLE environments ADD COLUMN group_name TEXT NOT NULL DEFAULT ''")
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_environments_group_name ON environments (group_name)')
 }
 
 /** 把损坏库移走：先清 WAL/SHM 边车，主文件改名为 .bak；备份失败也必须移走原文件保应用可用 */

@@ -21,12 +21,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-13, macos-14, ubuntu-22.04]
+        os: [windows-latest, macos-14, ubuntu-22.04]
         include:
           - os: windows-latest
             platform: win
-          - os: macos-13 # Intel -> x64 dmg
-            platform: mac
           - os: macos-14 # Apple Silicon -> arm64 dmg
             platform: mac
           - os: ubuntu-22.04

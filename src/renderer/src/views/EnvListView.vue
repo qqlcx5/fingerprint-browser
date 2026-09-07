@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Pencil, Play, Plus, ShieldAlert, Square, Trash2 } from '@lucide/vue'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useEnvs } from '../composables/useEnvs'
 import { errorText, pushToast, unwrap } from '../lib/toast'
 import type { CountryChangeInfo, Env, EnvSummary } from '@shared/types'
@@ -25,6 +25,29 @@ const editing = ref<Env | null>(null)
 const deleting = ref<EnvSummary | null>(null)
 const countryChange = ref<CountryChangeInfo | null>(null)
 const busyId = ref<string | null>(null)
+const query = ref('')
+const groupFilter = ref('')
+const selectedIds = ref<string[]>([])
+
+const groups = computed(() =>
+  [...new Set(rows.value.map((row) => row.group).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b)
+  )
+)
+const filteredRows = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  return rows.value.filter((row) => {
+    const matchesGroup = !groupFilter.value || row.group === groupFilter.value
+    const haystack =
+      `${row.name} ${row.remark} ${row.group} ${row.proxySummary ?? ''}`.toLowerCase()
+    return matchesGroup && (!q || haystack.includes(q))
+  })
+})
+const allVisibleSelected = computed(
+  () =>
+    filteredRows.value.length > 0 &&
+    filteredRows.value.every((row) => selectedIds.value.includes(row.id))
+)
 
 function fmtTime(ts: number | null): string {
   if (!ts) return '从未启动'
@@ -82,6 +105,26 @@ async function onDelete(): Promise<void> {
     await refresh()
   }
 }
+
+function toggleAllVisible(): void {
+  selectedIds.value = allVisibleSelected.value
+    ? selectedIds.value.filter((id) => !filteredRows.value.some((row) => row.id === id))
+    : [...new Set([...selectedIds.value, ...filteredRows.value.map((row) => row.id)])]
+}
+
+async function deleteSelected(): Promise<void> {
+  const ids = [...selectedIds.value]
+  for (const id of ids) {
+    const res = await window.api.envDelete({ id })
+    if (!res.ok) {
+      pushToast('error', errorText(res.error))
+      return
+    }
+  }
+  selectedIds.value = []
+  pushToast('success', `已删除 ${ids.length} 个环境`)
+  await refresh()
+}
 </script>
 
 <template>
@@ -111,7 +154,25 @@ async function onDelete(): Promise<void> {
 
     <p v-if="loading" class="muted">加载中…</p>
 
-    <div v-else-if="rows.length === 0" class="empty">
+    <div v-else class="list-tools">
+      <input v-model="query" class="search" type="search" placeholder="搜索名称、备注或代理" />
+      <select v-model="groupFilter" class="group-filter">
+        <option value="">全部分组</option>
+        <option v-for="group in groups" :key="group" :value="group">{{ group }}</option>
+      </select>
+      <Button
+        v-if="selectedIds.length"
+        variant="outline"
+        size="sm"
+        class="bulk-delete"
+        @click="deleteSelected"
+      >
+        <Trash2 aria-hidden="true" />
+        删除 {{ selectedIds.length }} 项
+      </Button>
+    </div>
+
+    <div v-if="!loading && rows.length === 0" class="empty">
       <div class="empty__icon"><ShieldAlert aria-hidden="true" /></div>
       <p class="empty__title">还没有环境</p>
       <p class="muted">创建独立环境来分离浏览器数据、代理和指纹。</p>
@@ -121,10 +182,13 @@ async function onDelete(): Promise<void> {
       </Button>
     </div>
 
-    <div v-else class="table-wrap">
+    <div v-else-if="rows.length" class="table-wrap">
       <table class="table">
         <thead>
           <tr>
+            <th class="select-col">
+              <input type="checkbox" :checked="allVisibleSelected" @change="toggleAllVisible" />
+            </th>
             <th>名称</th>
             <th>代理</th>
             <th>状态</th>
@@ -133,9 +197,18 @@ async function onDelete(): Promise<void> {
           </tr>
         </thead>
         <tbody>
-          <tr v-for="e in rows" :key="e.id">
+          <tr v-for="e in filteredRows" :key="e.id">
+            <td class="select-col">
+              <input
+                v-model="selectedIds"
+                type="checkbox"
+                :value="e.id"
+                :disabled="e.status !== 'idle'"
+              />
+            </td>
             <td>
               <div class="name">{{ e.name }}</div>
+              <div v-if="e.group" class="group">{{ e.group }}</div>
               <div v-if="e.remark" class="remark">{{ e.remark }}</div>
             </td>
             <td>
@@ -247,10 +320,30 @@ h1 {
   font-size: 12px;
 }
 .page__actions,
-.row-actions {
+.row-actions,
+.list-tools {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+.list-tools {
+  margin-bottom: 12px;
+}
+.search,
+.group-filter {
+  height: 32px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  padding: 0 10px;
+  color: #374151;
+  font-size: 13px;
+}
+.search {
+  width: min(300px, 100%);
+}
+.bulk-delete {
+  color: #b42318;
 }
 .table-wrap {
   overflow-x: auto;
@@ -304,6 +397,23 @@ h1 {
 .delete-action:hover:not(:disabled) {
   color: #8f1710;
   background: #fff1f0;
+}
+.select-col {
+  width: 36px;
+  padding-right: 0 !important;
+  text-align: center !important;
+}
+.select-col input {
+  accent-color: #111827;
+}
+.group {
+  display: inline-block;
+  margin-top: 4px;
+  border-radius: 4px;
+  background: #f3f4f6;
+  padding: 1px 5px;
+  color: #6b7280;
+  font-size: 11px;
 }
 .name {
   max-width: 240px;

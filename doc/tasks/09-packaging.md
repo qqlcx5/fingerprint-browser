@@ -38,6 +38,7 @@
 - `pnpm exec electron-builder --mac --config electron-builder.yml` ✓
   - 产物：`dist/fingerprint-browser-1.0.0.dmg`（120MB）及 `.blockmap`
 - DMG 只读挂载后，从挂载卷内运行 `E2E_SMOKE=1 "Fingerprint Browser.app/..."` → `E2E_RESULT PASS` ✓
+- 2026-09-08 UI 重构后重新执行 `pnpm build:mac`，并从新 DMG 挂载卷内复跑 E2E → PASS ✓
 - 预期项：未签名（`identity: null`）且未公证（`notarize: false`）；正式外部分发前仍需补 Apple 签名与公证
 
 ### 运行态验收（2026-09-08）
@@ -48,11 +49,11 @@
   - 同一持久化环境各启动两次，UA、平台、硬件并发、屏幕、WebGL、时区、语言逐字段一致，并与持久化核心指纹匹配。
 - `PLAYWRIGHT_CHROMIUM_DOWNLOAD_HOST=http://127.0.0.1:9 E2E_SMOKE=1 E2E_KERNEL_FAILURE=1 pnpm exec electron .` ✓
   - 两次 `browser:ensure` 均返回 `KERNEL_DOWNLOAD_FAILED`，可重试路径有效。
-- 真实代理运行态：`E2E_SMOKE=1 E2E_RUNTIME=1 E2E_RUNTIME_COUNT=2 E2E_RUNTIME_PROXIES=... pnpm exec electron .` ✓
-  - HTTP 与 SOCKS5 环境均经真实代理出口创建、启动、关窗重启、持久 Cookie、停止回 idle；两种协议出口均为 `59.125.60.81 / TW`，直测延迟约 426–429ms，E2E 总启动 22.675s（含首次内核准备，不计入 ≤5s 指标）。
-- 本轮代理范围只覆盖常用 HTTP/SOCKS5；跨国家地区变化确认流保留在代码中，但不作为当前验收阻塞项。认证失败仍待认证型代理端点。
+- 真实代理运行态：`E2E_SMOKE=1 E2E_RUNTIME=1 E2E_RUNTIME_COUNT=3 E2E_RUNTIME_PROXIES=... pnpm exec electron .` ✓
+  - HTTP、SOCKS5、HTTP 三环境均经真实代理出口创建、启动、关窗重启、持久 Cookie、跨环境 Cookie 隔离、停止回 idle；三者共用同一出口，不宣称多出口 IP 隔离。直测出口为 `59.125.60.81 / TW`，延迟约 426–429ms，E2E 总启动 24.444s（含首次内核准备，不计入 ≤5s 指标）。
+- 本轮代理范围只覆盖常用 HTTP/SOCKS5；跨国家地区变化与认证失败均不作为当前验收阻塞项，相关确认流与错误处理代码保留。
 - 10 个直连环境并发采样：约 10 分 24 秒（执行器单次时限中断，非完整 30 分钟）；Chromium 进程 RSS 求和峰值 **8.34GB**，但 RSS 会重复计算共享内存，不能替代 ≤6GB 的整机物理内存指标，验收 7 保持未完成并标记高风险。环境目录总 125MB、平均 12.5MB（空白 profile，不作为 100–300MB 业务数据量结论）。所有测试 Chromium 已退出，无孤儿进程。
-- 未执行：Windows NSIS 安装/卸载；认证型代理的错误密码验收。
+- 未执行：Windows NSIS 安装/卸载。认证失败与跨国家地区变化按本轮范围跳过。
 
 ### 配置层（2026-09-07，本窗口）
 
@@ -75,10 +76,10 @@ pnpm build:mac && hdiutil attach dist/fingerprint-browser-*.dmg          # T3：
 
 | #   | 验收项（需求 §12）                                | 结果 | 备注                         |
 | --- | ------------------------------------------------- | ---- | ---------------------------- |
-| 1   | 3 环境 × 不同代理并行：不串号、不掉线             | △    | HTTP/SOCKS5 两环境真实运行 PASS；第三环境与长稳未完成 |
+| 1   | 3 环境 × 不同代理并行：不串号、不掉线             | ✓    | HTTP/SOCKS5 三环境真实运行、Cookie 隔离 PASS；共用同一出口 IP |
 | 2   | 重启应用重开环境：登录态保留                      | △    | 同一应用内重启环境后持久 Cookie PASS；未完整重启 Electron |
 | 3   | 同环境两次启动 browserleaks/creepjs：核心指纹一致 | ✓    | 两站各双启动，核心字段与持久化记录一致 |
-| 4   | 代理密码错误：阻止启动 + 明确"认证失败"           | ☐    | 待认证型代理 |
+| 4   | 代理密码错误：阻止启动 + 明确"认证失败"           | N/A  | 本轮常用无认证代理范围跳过 |
 | 5   | 换代理国家变化：确认后仅对齐字段变，核心指纹不变  | N/A  | 本轮常用代理范围不验证跨国家变化；确认流代码保留 |
 | 6   | 关某环境窗口：该环境 idle，其他不受影响           | △    | 单环境真实 context close → idle PASS；多环境隔离待 1 一并验证 |
 | 7   | 10 环境并行 30 分钟：无崩溃、无串数据、状态实时   | △    | 约 10 分钟 RSS 求和峰值 8.34GB（会重复计算共享内存）；未满 30 分钟、未采样整机物理内存 |

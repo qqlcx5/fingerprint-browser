@@ -145,6 +145,7 @@ async function runSmoke(): Promise<void> {
       })()`
     )
     let cookiePersisted = false
+    let cookieIsolated = count < 2
     let windowCloseIdle = false
     if (runtime.ok && runtime.ids.length > 0) {
       const id = runtime.ids[0] as string
@@ -159,6 +160,10 @@ async function runSmoke(): Promise<void> {
             expires: Math.floor(Date.now() / 1_000) + 3_600
           }
         ])
+        const other = runtime.ids[1] ? getContext(runtime.ids[1] as string) : undefined
+        cookieIsolated =
+          !!other &&
+          !(await other.cookies('https://example.com')).some((cookie) => cookie.name === 'fp_e2e')
         await first.close() // 等价于用户关闭该环境的最后一个浏览器窗口
         const afterClose = await win.webContents.executeJavaScript(
           `window.api.envStatus().then((r) => r)`
@@ -192,6 +197,7 @@ async function runSmoke(): Promise<void> {
       runtime.ids.every((id: string) => runtime.status.data[id] === 'running') &&
       windowCloseIdle &&
       cookiePersisted &&
+      cookieIsolated &&
       allIdle
     console.log(
       'E2E_RUNTIME',
@@ -201,6 +207,7 @@ async function runSmoke(): Promise<void> {
         started: runtime.ok,
         windowCloseIdle,
         cookiePersisted,
+        cookieIsolated,
         allIdle
       })
     )

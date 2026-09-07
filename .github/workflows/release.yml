@@ -53,8 +53,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # electron-builder.yml 中 publish 为 generic 占位配置，
-      # 此处通过 -c.publish.provider=github 覆盖为发布到 GitHub Releases
+      # publish 配置已在 electron-builder.yml 中定义为 github provider，
+      # 这里显式 --publish=always 触发上传到 GitHub Releases（草稿）
       - name: Build & Release (${{ matrix.platform }})
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -65,7 +65,7 @@ jobs:
           # APPLE_ID: ${{ secrets.APPLE_ID }}
           # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm run build:${{ matrix.platform }} -c.publish.provider=github -c.publish.releaseType=draft
+        run: pnpm run build:${{ matrix.platform }} --publish=always
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

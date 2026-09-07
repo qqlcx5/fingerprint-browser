@@ -65,9 +65,11 @@ appImage:
 # 原生模块（better-sqlite3）已在 postinstall 由 install-app-deps 按 Electron ABI 重编，
 # 打包阶段不再重复 rebuild；可用 pnpm exec electron scripts/check-native.cjs 在包内验证
 npmRebuild: false
-# P2 自动更新占位（electron-updater 已预装）；正式发布前替换为真实更新源
+# P2 自动更新占位（electron-updater 已预装）
+# 发布到 GitHub Releases（Release 工作流依赖此配置）；
+# 后续 electron-updater 自动更新将直接从 GitHub Releases 拉取
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  releaseType: draft
 electronDownload:
   mirror: https://npmmirror.com/mirrors/electron/

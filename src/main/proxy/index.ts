@@ -8,7 +8,8 @@
  *
  * 接线：src/main/index.ts 中调用 registerProxyIpc()（集成阶段统一接线，见模块 md 末尾说明）
  */
-import { IPC, type EgressInfo, type ProxyConfig } from '../../shared/types'
+import { IPC, type EgressInfo, type ProxyTestInput } from '../../shared/types'
+import { decryptProxyConfig, getEnvDao } from '../db'
 import { defineIpc } from '../ipc'
 import { testEgress } from './testEgress'
 import { validateProxyConfig } from './validate'
@@ -31,8 +32,20 @@ export {
 
 /** 注册本模块全部 IPC 通道（当前仅 proxy:test） */
 export function registerProxyIpc(): void {
-  defineIpc<ProxyConfig, EgressInfo>(IPC.proxyTest, async (payload) => {
-    const cfg = validateProxyConfig(payload) // 非法 → VALIDATION（字段级清单）
-    return testEgress(cfg) // 失败 → 四类 PROXY_* 分类错误
+  defineIpc<ProxyTestInput, EgressInfo>(IPC.proxyTest, async (payload) => {
+    let input = payload
+    const savedPasswordEnvId =
+      payload !== null && typeof payload === 'object' ? payload.savedPasswordEnvId : undefined
+    const missingPassword =
+      payload !== null && typeof payload === 'object' && payload.password === undefined
+    if (missingPassword && typeof savedPasswordEnvId === 'string') {
+      const stored = getEnvDao().getEnv(savedPasswordEnvId)?.proxyConfig
+      if (stored?.password) {
+        // 密码只在主进程中解密，供本次测试使用；不会进入 IPC 返回值或日志。
+        input = { ...input, password: decryptProxyConfig(stored).password }
+      }
+    }
+    const cfg = validateProxyConfig(input)
+    return testEgress(cfg)
   })
 }

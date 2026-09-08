@@ -153,8 +153,13 @@ export function createEnvDao(db: Database.Database): EnvDao {
       values.push(changes.group.trim())
     }
     if (changes.proxyConfig !== undefined) {
+      const current = getEnv(id)
       sets.push('proxy_config = ?')
-      values.push(changes.proxyConfig ? JSON.stringify(sealProxy(changes.proxyConfig)) : null)
+      values.push(
+        changes.proxyConfig
+          ? JSON.stringify(sealProxy(changes.proxyConfig, current?.proxyConfig))
+          : null
+      )
     }
     if (changes.alignFields !== undefined) {
       sets.push('align_fields = ?')
@@ -190,7 +195,7 @@ export function createEnvDao(db: Database.Database): EnvDao {
   return { createEnv, getEnv, listEnvs, updateEnv, updateFingerprint, deleteEnv }
 }
 
-function sealProxy(config: ProxyConfig): StoredProxyConfig {
+function sealProxy(config: ProxyConfig, previous?: StoredProxyConfig | null): StoredProxyConfig {
   const stored: StoredProxyConfig = {
     type: config.type,
     host: config.host,
@@ -199,6 +204,9 @@ function sealProxy(config: ProxyConfig): StoredProxyConfig {
   }
   if (config.password) {
     stored.password = encryptSecret(config.password)
+  } else if (previous?.password) {
+    // 编辑接口不会回传密码；留空表示保留已有密文。移除整个代理时仍由 null 显式处理。
+    stored.password = previous.password
   }
   return stored
 }

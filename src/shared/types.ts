@@ -50,6 +50,14 @@ export interface ProxyConfig {
   password?: string
 }
 
+/**
+ * 代理测试载荷。编辑既有环境时可带来源环境 ID，让主进程仅在内存中复用其已加密密码；
+ * 密码本身绝不回传渲染层。
+ */
+export interface ProxyTestInput extends ProxyConfig {
+  savedPasswordEnvId?: string
+}
+
 /** 回传给渲染层的代理配置：密码永不回传（需求文档 §8） */
 export type PublicProxyConfig = Omit<ProxyConfig, 'password'> & { hasPassword: boolean }
 
@@ -285,7 +293,7 @@ export interface IpcPayloadMap {
   [IPC.envStart]: IdInput
   [IPC.envStop]: IdInput
   [IPC.envStatus]: undefined
-  [IPC.proxyTest]: ProxyConfig
+  [IPC.proxyTest]: ProxyTestInput
   [IPC.browserEnsure]: undefined
   [IPC.alignConfirm]: AlignConfirmInput
   [IPC.appNotices]: undefined
@@ -338,7 +346,7 @@ export interface Api {
   envStart(input: IdInput): Promise<Result<CountryChangeInfo | null>>
   envStop(input: IdInput): Promise<Result<{ id: string }>>
   envStatus(): Promise<Result<EnvStatusMap>>
-  proxyTest(input: ProxyConfig): Promise<Result<EgressInfo>>
+  proxyTest(input: ProxyTestInput): Promise<Result<EgressInfo>>
   browserEnsure(): Promise<Result<KernelInfo>>
   alignConfirm(input: AlignConfirmInput): Promise<Result<{ id: string }>>
   /** 启动期一次性通知（DB 重置、加密降级等）；渲染层挂载后拉取一次，读后清空 */

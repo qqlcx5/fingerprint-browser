@@ -32,6 +32,10 @@ nsis:
   # 向导式安装 + 许可协议页（build/license.txt，§1 合规：用途限制必须装机展示）
   oneClick: false
   allowToChangeInstallationDirectory: true
+  # 编码要求：license 必须是「UTF-8 with BOM + CRLF」。
+  # electron-builder 仅在读取多语言 license_xx.txt 时才自动补 BOM（见 app-builder-lib/out/targets/nsis/nsisLicense.js），
+  # 显式指定 nsis.license 时原样交给 NSIS；无 BOM 会被 NSIS 按系统 ANSI 代码页（中文 Windows = GBK）解码 → 许可页乱码。
+  # 另存/编辑此文件后务必确认 BOM 与 CRLF 仍在（file build/license.txt 应显示 "UTF-8 (with BOM) ... CRLF"）。
   license: build/license.txt
   runAfterFinish: true
   # §8 卸载行为：卸载不删除 userData（保留登录态）；"彻底清除数据"走 app:wipeData 入口

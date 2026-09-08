@@ -26,6 +26,7 @@
 1. **productName 与 userData 路径**：打包后 `app.getName()` 取 productName（`Fingerprint Browser`），与开发态（`fingerprint-browser`）目录分离，属预期隔离；`dev-app-update.yml` 的 updaterCacheDirName 不受影响。
 2. **安装协议进安装器而非仅文档**：§1 要求"安装协议注明用途限制"，NSIS license 页是装机唯一强制展示点；mac 无对应机制，靠随包文档 + 应用内首启提示（08-ui 范畴）补齐。
 3. **无证书仅作受控内测**：Win 与 Mac 均不签名；Mac 的 `identity: null` 会使 electron-builder 跳过签名，受控机器可手动放行，外部分发前必须补 Developer ID 签名与公证——补法已写入 yml 注释。
+4. **NSIS 许可页中文乱码（2026-09-09 修复）**：`build/license.txt` 原为 UTF-8 无 BOM + LF。electron-builder 只在读取多语言 `license_xx.txt` 时自动补 BOM（`app-builder-lib/out/targets/nsis/nsisLicense.js` 的 `convertFileToUtf8WithBOMSync`），显式 `nsis.license` 走 `MUI_PAGE_LICENSE` 原样透传，无 BOM 时 NSIS 按系统 ANSI 代码页（中文 Windows = GBK）解码 → 乱码。已将文件改为 **UTF-8 with BOM + CRLF**，并在 `electron-builder.yml` 注释固化该约束；后续另存此文件需复查 `file build/license.txt` 输出含 `UTF-8 (with BOM)` 与 `CRLF`。T2 在真机验证时把"许可页中文正常、换行正常"列为检查项。
 
 ## 验证记录
 

@@ -23,8 +23,7 @@ const form = reactive({
     ('proxySummary' in props.env ? !!props.env.proxySummary : !!props.env.proxyConfig)
 })
 
-// 编辑态回填。PublicProxyConfig 不含密码（§8 永不回传）：
-// 代理字段一旦被改动，密码必须重新输入；完全未动则提交时省略 proxyConfig（保持原样）。
+// 编辑态回填。PublicProxyConfig 不含密码（§8 永不回传）；密码输入框留空表示保留已存密码。
 const savedProxy = ref<PublicProxyConfig | null>(null)
 if (isEdit && props.env?.proxyConfig) {
   const p = props.env.proxyConfig
@@ -63,7 +62,8 @@ async function onTest(): Promise<void> {
   }
   testing.value = true
   testResult.value = null
-  const res = await window.api.proxyTest(cfg)
+  const testInput = isEdit && props.env ? { ...cfg, savedPasswordEnvId: props.env.id } : cfg
+  const res = await window.api.proxyTest(testInput)
   testing.value = false
   if (res.ok) testResult.value = res.data
   else pushToast('error', errorText(res.error))
@@ -77,21 +77,11 @@ async function onSave(): Promise<void> {
   }
   // 代理提交语义：
   // - 新建：useProxy 即提交（或 null 直连）
-  // - 编辑且未动代理字段：省略 proxyConfig（原配置与密码保持不变）
-  // - 编辑且动了字段：密码必填（原 hasPassword 时），防止意外清空
+  // - 编辑且未动代理字段：省略 proxyConfig（原配置保持不变）
+  // - 编辑且改动代理字段：密码留空则由主进程保留已有密文
   let proxyConfig: ProxyConfig | null | undefined
   if (!isEdit || proxyDirty.value || (form.useProxy === false && savedProxy.value)) {
     proxyConfig = form.useProxy ? buildProxyConfig() : null
-    if (
-      proxyConfig &&
-      savedProxy.value?.hasPassword &&
-      !proxyConfig.password &&
-      proxyConfig.host === savedProxy.value.host &&
-      proxyConfig.port === savedProxy.value.port
-    ) {
-      pushToast('error', '该代理已存有密码，请重新输入密码（出于安全不回显）')
-      return
-    }
   }
   busy.value = true
   const payload = {
@@ -171,7 +161,9 @@ async function onSave(): Promise<void> {
           </label>
         </div>
         <label class="field">
-          <span>密码{{ savedProxy?.hasPassword ? '（修改代理后需重新输入）' : '（可选）' }}</span>
+          <span
+            >密码{{ savedProxy?.hasPassword ? '（已安全保存，留空保持不变）' : '（可选）' }}</span
+          >
           <input v-model="form.password" type="password" placeholder="可选" @input="markDirty" />
         </label>
         <div class="test">

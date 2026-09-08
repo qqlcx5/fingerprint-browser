@@ -9,6 +9,7 @@
  */
 import { FingerprintGenerator } from 'fingerprint-generator'
 import { localeForCountry } from './align'
+import { warnFingerprint } from './warnings'
 import type { CoreFingerprint } from '../../shared/types'
 
 /** 桌面 Chrome 指纹：内核为 Playwright Chromium，只生成 chrome 桌面组合 */
@@ -36,8 +37,10 @@ export function generateCoreFingerprint(country: string | null | undefined): Cor
     }).fingerprint
   } catch (e) {
     // 个别 locale 与 OS 组合可能无生成场景：回退 en-US，不再让创建流程失败
-    // TODO 集成阶段替换为 02-T6 滚动日志器
-    console.warn(`[fingerprint:generate] locale "${locale}" 生成失败，回退 en-US：`, e)
+    warnFingerprint('generate_fallback', {
+      locale,
+      reason: e instanceof Error ? e.message : String(e)
+    })
     fingerprint = GENERATOR.getFingerprint({
       locales: ['en-US'],
       browsers: ['chrome'],

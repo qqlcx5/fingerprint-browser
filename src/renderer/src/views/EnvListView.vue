@@ -42,6 +42,7 @@ const busyId = ref<string | null>(null)
 const query = ref('')
 const groupFilter = ref('')
 const selectedIds = ref<string[]>([])
+const bulkDeletePending = ref(false)
 const showLogs = ref(false)
 const logLines = ref<string[]>([])
 const startupEnabled = ref(false)
@@ -171,18 +172,23 @@ async function openLogs(): Promise<void> {
   showLogs.value = true
 }
 
-async function deleteSelected(): Promise<void> {
+async function deleteSelected(): Promise<boolean> {
   const ids = [...selectedIds.value]
   for (const id of ids) {
     const res = await window.api.envDelete({ id })
     if (!res.ok) {
       pushToast('error', errorText(res.error))
-      return
+      return false
     }
   }
   selectedIds.value = []
   pushToast('success', `已删除 ${ids.length} 个环境`)
   await refresh()
+  return true
+}
+
+async function confirmBulkDelete(): Promise<void> {
+  if (await deleteSelected()) bulkDeletePending.value = false
 }
 </script>
 
@@ -261,7 +267,7 @@ async function deleteSelected(): Promise<void> {
         variant="outline"
         size="sm"
         class="bulk-delete"
-        @click="deleteSelected"
+        @click="bulkDeletePending = true"
       >
         <Trash2 aria-hidden="true" />
         删除 {{ selectedIds.length }} 项
@@ -375,6 +381,16 @@ async function deleteSelected(): Promise<void> {
       </table>
     </div>
 
+    <Modal
+      v-if="bulkDeletePending"
+      title="确认批量删除"
+      danger
+      confirm-text="删除选中环境"
+      @confirm="confirmBulkDelete"
+      @cancel="bulkDeletePending = false"
+    >
+      <p>将删除 {{ selectedIds.length }} 个环境的配置与浏览数据，无法恢复。</p>
+    </Modal>
     <Modal
       v-if="showLogs"
       title="运行日志"

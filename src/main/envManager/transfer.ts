@@ -1,7 +1,15 @@
 import { dialog } from 'electron'
 import { readFileSync, writeFileSync } from 'fs'
 import type { EnvTransfer, ProxyConfig, PublicProxyConfig } from '../../shared/types'
-import { createEnvWithDirs, getEnvDao, toPublicProxy, type EnvRecord } from '../db'
+import {
+  createEnvWithDirs,
+  deleteEnvWithDirs,
+  getEnvDao,
+  toPublicProxy,
+  type EnvRecord
+} from '../db'
+import { alignFieldsError, coreFingerprintError } from '../fingerprint'
+import { validateProxyConfig } from '../proxy'
 
 function exportRecord(record: EnvRecord): EnvTransfer['environments'][number] {
   return {
@@ -20,9 +28,18 @@ function parseTransfer(text: string): EnvTransfer {
     throw new Error('导入文件格式无效')
   }
   for (const item of parsed.environments) {
-    if (!item || typeof item.name !== 'string' || !item.fingerprint || !item.alignFields) {
-      throw new Error('导入文件含无效环境配置')
+    if (!item || typeof item.name !== 'string' || item.name.trim() === '') {
+      throw new Error('导入文件含空环境名称')
     }
+    if (typeof item.remark !== 'string' || typeof item.group !== 'string') {
+      throw new Error('导入文件的备注或分组不合法')
+    }
+    const fingerprintError = coreFingerprintError(item.fingerprint)
+    const alignError = alignFieldsError(item.alignFields)
+    if (fingerprintError || alignError) {
+      throw new Error(`导入文件含无效环境配置：${fingerprintError ?? alignError}`)
+    }
+    if (item.proxyConfig) validateProxyConfig(toImportProxy(item.proxyConfig))
   }
   return parsed as EnvTransfer
 }
@@ -52,18 +69,25 @@ export async function importEnvs(): Promise<{ count: number; path: string | null
   if (result.canceled || !filePath) return { count: 0, path: null }
   const transfer = parseTransfer(readFileSync(filePath, 'utf8'))
   const dao = getEnvDao()
-  for (const item of transfer.environments) {
-    const proxyConfig = item.proxyConfig ? toImportProxy(item.proxyConfig) : null
-    createEnvWithDirs(dao, {
-      name: item.name.trim(),
-      remark: item.remark ?? '',
-      group: item.group ?? '',
-      fingerprint: item.fingerprint,
-      alignFields: item.alignFields,
-      proxyConfig
-    })
+  const created: string[] = []
+  try {
+    for (const item of transfer.environments) {
+      const proxyConfig = item.proxyConfig ? toImportProxy(item.proxyConfig) : null
+      const record = createEnvWithDirs(dao, {
+        name: item.name.trim(),
+        remark: item.remark,
+        group: item.group,
+        fingerprint: item.fingerprint,
+        alignFields: item.alignFields,
+        proxyConfig
+      })
+      created.push(record.id)
+    }
+  } catch (error) {
+    for (const id of created.reverse()) deleteEnvWithDirs(dao, id)
+    throw error
   }
-  return { count: transfer.environments.length, path: filePath }
+  return { count: created.length, path: filePath }
 }
 
 function toImportProxy(proxy: PublicProxyConfig): ProxyConfig {

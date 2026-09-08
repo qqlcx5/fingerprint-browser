@@ -8,6 +8,7 @@
  * 本模块保持零 electron 依赖（纯逻辑），供 generate / inject / 脚本直接复用。
  */
 import type { AlignFields } from '../../shared/types'
+import { warnFingerprint } from './warnings'
 
 export interface CountryAlignEntry {
   /** IANA 时区，如 'Europe/Berlin' */
@@ -260,10 +261,7 @@ export const FALLBACK_ALIGN: CountryAlignEntry = {
 }
 
 function warnFallback(country: string | null | undefined): void {
-  // TODO 集成阶段替换为 02-T6 滚动日志器（userData/logs/）
-  console.warn(
-    `[fingerprint:align] 国家 "${country ?? '(空)'}" 未内置对齐映射，回退 UTC/en-US。可在 COUNTRY_ALIGN_TABLE 中补充。`
-  )
+  warnFingerprint('align_fallback', { country: country ?? null, fallback: 'UTC/en-US' })
 }
 
 function normalizeCountry(country: string | null | undefined): string | null {

@@ -5,7 +5,7 @@ import { createRequire } from 'module'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/types'
 import { defineIpc, registerIpc } from './ipc'
-import { setupStorage, closeStorage, getEnvDao } from './db'
+import { setupStorage, closeStorage, getEnvDao, getLogger } from './db'
 import {
   initStatuses,
   cleanupOrphanChromium,
@@ -16,6 +16,7 @@ import {
 import { registerEnvManagerIpc, pushNotice } from './envManager'
 import { registerKernelIpc } from './kernel'
 import { registerProxyIpc } from './proxy'
+import { setFingerprintWarningSink } from './fingerprint'
 import icon from '../../resources/icon.png?asset'
 
 const nodeRequire = createRequire(__filename)
@@ -116,7 +117,10 @@ async function runSmoke(): Promise<void> {
     `(async () => {
       const ping = await window.api.ping()
       const list0 = await window.api.envList()
-      const created = await window.api.envCreate({ name: 'smoke-env' })
+      const created = await window.api.envCreate({ name: 'smoke-env', group: 'e2e' })
+      const invalidFingerprint = created.ok
+        ? await window.api.envUpdateFingerprint({ id: created.data.id, fingerprint: { userAgent: 'bad' } })
+        : created
       const invalidProxy = await window.api.envCreate({
         name: 'invalid-proxy',
         proxyConfig: { type: 'ftp', host: '', port: 0 }
@@ -126,7 +130,18 @@ async function runSmoke(): Promise<void> {
       const list2 = await window.api.envList()
       const status = await window.api.envStatus()
       const notices = await window.api.appNotices()
-      return { ping, list0, created, invalidProxy, list1, del, list2, status, notices }
+      return {
+        ping,
+        list0,
+        created,
+        invalidFingerprint,
+        invalidProxy,
+        list1,
+        del,
+        list2,
+        status,
+        notices
+      }
     })()`
   )
   console.log('E2E_PING', JSON.stringify(res.ping))
@@ -140,6 +155,7 @@ async function runSmoke(): Promise<void> {
       list2Count: res.list2.ok ? res.list2.data.length : -1
     })
   )
+  console.log('E2E_FINGERPRINT_VALIDATION', JSON.stringify(res.invalidFingerprint))
   console.log('E2E_PROXY_VALIDATION', JSON.stringify(res.invalidProxy))
   console.log('E2E_STATUS', JSON.stringify(res.status))
   console.log('E2E_NOTICES', JSON.stringify(res.notices))
@@ -360,16 +376,20 @@ async function runSmoke(): Promise<void> {
     res.list0.ok &&
     res.list1.ok &&
     res.list1.data.length === res.list0.data.length + 1 &&
+    res.list1.data.some((env) => env.id === res.created.data.id && env.group === 'e2e') &&
     res.list2.ok &&
     res.list2.data.length === res.list0.data.length &&
     res.status.ok &&
     Object.values(res.status.data).every((s) => s === 'idle')
+  const fingerprintValidationOk =
+    !res.invalidFingerprint.ok && res.invalidFingerprint.error.code === 'VALIDATION'
   const proxyValidationOk = !res.invalidProxy.ok && res.invalidProxy.error.code === 'VALIDATION'
   console.log(
     'E2E_RESULT',
     pingOk &&
       crudOk &&
       proxyValidationOk &&
+      fingerprintValidationOk &&
       kernelFailureOk &&
       runtimeOk &&
       persistenceOk &&
@@ -382,6 +402,7 @@ async function runSmoke(): Promise<void> {
     pingOk &&
       crudOk &&
       proxyValidationOk &&
+      fingerprintValidationOk &&
       kernelFailureOk &&
       runtimeOk &&
       persistenceOk &&
@@ -429,6 +450,7 @@ app.whenReady().then(() => {
   }
 
   const storage = setupStorage()
+  setFingerprintWarningSink((event, detail) => getLogger().warn(`fingerprint.${event}`, detail))
   if (storage.reset) {
     // §9：库损坏已自动重建 → 启动期通知，渲染层挂载后拉取（07-T9）
     pushNotice('db_reset', '数据库曾损坏，已自动重建；环境列表为空属预期')

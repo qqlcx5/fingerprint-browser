@@ -30,7 +30,11 @@ import {
   type EnvChanges,
   type EnvRecord
 } from '../db'
-import { alignFieldsForCountry, generateCoreFingerprint } from '../fingerprint'
+import {
+  alignFieldsForCountry,
+  coreFingerprintError,
+  generateCoreFingerprint
+} from '../fingerprint'
 import { testEgress, validateProxyConfig } from '../proxy'
 import { getStatus, getStatusMap, launchEnv, stopEnv } from '../launcher'
 import { drainNotices, pushNotice } from './notices'
@@ -131,28 +135,9 @@ function registerEnvChannels(): void {
 
   defineIpc<FingerprintUpdateInput, Env>(IPC.envUpdateFingerprint, (input) => {
     if (getStatus(input.id) !== 'idle') fail('ENV_RUNNING', '环境运行中，不能修改核心指纹')
-    const fingerprint = input.fingerprint
-    if (
-      !fingerprint ||
-      !/Chrome\/\d+/.test(fingerprint.userAgent) ||
-      !fingerprint.platform ||
-      !Number.isInteger(fingerprint.hardwareConcurrency) ||
-      fingerprint.hardwareConcurrency < 1 ||
-      fingerprint.hardwareConcurrency > 128 ||
-      !Number.isFinite(fingerprint.deviceMemory) ||
-      fingerprint.deviceMemory < 1 ||
-      fingerprint.deviceMemory > 128 ||
-      fingerprint.screen.width < 600 ||
-      fingerprint.screen.height < 600 ||
-      fingerprint.screen.width > 10_000 ||
-      fingerprint.screen.height > 10_000 ||
-      !fingerprint.webgl.vendor ||
-      !fingerprint.webgl.renderer ||
-      !/^[a-z]{2,3}-[A-Z]{2}$/.test(fingerprint.locale)
-    ) {
-      fail('VALIDATION', '核心指纹字段不合法')
-    }
-    const updated = getEnvDao().updateFingerprint(input.id, fingerprint)
+    const error = coreFingerprintError(input.fingerprint)
+    if (error) fail('VALIDATION', error)
+    const updated = getEnvDao().updateFingerprint(input.id, input.fingerprint)
     if (!updated) fail('NOT_FOUND', `环境不存在: ${input.id}`)
     getLogger().info('envManager.fingerprint_updated', { id: input.id })
     return toEnv(updated)
@@ -209,12 +194,15 @@ function registerAppChannels(): void {
   defineIpc(IPC.envExport, () => exportEnvs())
   defineIpc(IPC.envImport, () => importEnvs())
   defineIpc(IPC.appLogs, () => {
-    try {
-      const lines = readFileSync(join(logsDir(), 'main.log'), 'utf8').trim().split('\n').slice(-300)
-      return { lines }
-    } catch {
-      return { lines: [] }
+    const lines: string[] = []
+    for (const file of ['main.4.log', 'main.3.log', 'main.2.log', 'main.1.log', 'main.log']) {
+      try {
+        lines.push(...readFileSync(join(logsDir(), file), 'utf8').trim().split('\n'))
+      } catch {
+        // 缺失的轮换文件属正常状态
+      }
     }
+    return { lines: lines.filter(Boolean).slice(-300) }
   })
 }
 

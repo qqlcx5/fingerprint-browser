@@ -34,7 +34,8 @@ jobs:
           # 已存在（重跑场景）则跳过创建，保证整个 tag 只有一个 Release
           gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
-              --draft --title "$TAG" --generate-notes
+              --draft --title "$TAG" --generate-notes \
+              --notes "⚠️ 构建进行中，各平台安装包将陆续上传。请等待本 tag 的 Release 工作流全部成功（约 15~30 分钟）后再点击 Publish，否则发布的 Release 会缺少安装包。"
 
   release:
     needs: create-release

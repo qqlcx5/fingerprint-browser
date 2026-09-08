@@ -17,7 +17,27 @@ permissions:
   contents: write # 创建 Release 必需
 
 jobs:
+  # 前置任务：先创建唯一的草稿 Release，避免 4 个 matrix 任务并行竞态各自创建草稿
+  # （否则同一 tag 会出现多个 Release 列表，产物被分散到不同草稿中）
+  create-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # 已存在（重跑场景）则跳过创建，保证整个 tag 只有一个 Release
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --draft --title "$TAG" --generate-notes
+
   release:
+    needs: create-release
     strategy:
       fail-fast: false
       matrix:

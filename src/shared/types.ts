@@ -228,6 +228,17 @@ export interface EnvCreateInput {
   proxyConfig?: ProxyConfig | null
 }
 
+export interface BatchEnvCreateInput {
+  group?: string
+  shop?: Partial<ShopMetadata>
+  items: Array<{
+    name: string
+    remark?: string
+    shopIdentifier?: string
+    proxyBinding: ProxyBindingInput
+  }>
+}
+
 export interface EnvUpdateInput {
   id: string
   name?: string
@@ -327,6 +338,7 @@ export const IPC = {
   envList: 'env:list',
   envGet: 'env:get',
   envCreate: 'env:create',
+  envBatchCreate: 'env:batch-create',
   envUpdate: 'env:update',
   envUpdateFingerprint: 'env:update-fingerprint',
   envDelete: 'env:delete',
@@ -364,6 +376,7 @@ export const INVOKE_CHANNELS: IpcChannel[] = [
   IPC.envList,
   IPC.envGet,
   IPC.envCreate,
+  IPC.envBatchCreate,
   IPC.envUpdate,
   IPC.envUpdateFingerprint,
   IPC.envDelete,
@@ -400,6 +413,7 @@ export interface IpcPayloadMap {
   [IPC.envList]: undefined
   [IPC.envGet]: IdInput
   [IPC.envCreate]: EnvCreateInput
+  [IPC.envBatchCreate]: BatchEnvCreateInput
   [IPC.envUpdate]: EnvUpdateInput
   [IPC.envUpdateFingerprint]: FingerprintUpdateInput
   [IPC.envDelete]: IdInput
@@ -431,6 +445,7 @@ export interface IpcDataMap {
   [IPC.envList]: EnvSummary[]
   [IPC.envGet]: Env | null
   [IPC.envCreate]: Env
+  [IPC.envBatchCreate]: Env[]
   [IPC.envUpdate]: Env
   [IPC.envUpdateFingerprint]: Env
   [IPC.envDelete]: { id: string }
@@ -466,6 +481,7 @@ export interface Api {
   /** 详情（含 proxyConfig 是否有密码）；不存在返回 null */
   envGet(input: IdInput): Promise<Result<Env | null>>
   envCreate(input: EnvCreateInput): Promise<Result<Env>>
+  envBatchCreate(input: BatchEnvCreateInput): Promise<Result<Env[]>>
   envUpdate(input: EnvUpdateInput): Promise<Result<Env>>
   envUpdateFingerprint(input: FingerprintUpdateInput): Promise<Result<Env>>
   envDelete(input: IdInput): Promise<Result<{ id: string }>>

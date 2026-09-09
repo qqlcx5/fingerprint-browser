@@ -1,11 +1,13 @@
 import { app, shell, BrowserWindow, Menu, Tray } from 'electron'
-import { join } from 'path'
+import { join, dirname } from 'path'
+import { mkdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { createRequire } from 'module'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { IPC } from '../shared/types'
 import { defineIpc, registerIpc } from './ipc'
 import { setupStorage, closeStorage, getEnvDao, getLogger } from './db'
+import { dbFile } from '../shared/paths'
 import {
   initStatuses,
   cleanupOrphanChromium,
@@ -14,6 +16,7 @@ import {
   getContext
 } from './launcher'
 import { registerEnvManagerIpc, pushNotice } from './envManager'
+import { parseTransfer } from './envManager/transfer'
 import { registerKernelIpc } from './kernel'
 import { registerProxyIpc } from './proxy'
 import { setFingerprintWarningSink } from './fingerprint'
@@ -39,6 +42,52 @@ function sqliteAvailable(): boolean {
     return true
   } catch {
     return false
+  }
+}
+
+function seedLegacyDatabase(): void {
+  const file = dbFile()
+  mkdirSync(dirname(file), { recursive: true })
+  const Database = nodeRequire('better-sqlite3') as new (path: string) => {
+    exec(sql: string): void
+    prepare(sql: string): { run(...values: unknown[]): void }
+    close(): void
+  }
+  const db = new Database(file)
+  try {
+    db.exec(`
+      CREATE TABLE environments (
+        id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, remark TEXT NOT NULL DEFAULT '',
+        fingerprint TEXT NOT NULL, align_fields TEXT NOT NULL, proxy_config TEXT,
+        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, last_launched_at INTEGER
+      );
+    `)
+    db.prepare(
+      `INSERT INTO environments
+        (id, name, remark, fingerprint, align_fields, proxy_config, created_at, updated_at, last_launched_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      '00000000-0000-4000-8000-000000000001',
+      'legacy-db-env',
+      '',
+      JSON.stringify({
+        userAgent:
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
+        platform: 'Win32',
+        hardwareConcurrency: 4,
+        deviceMemory: 8,
+        screen: { width: 1920, height: 1080, colorDepth: 24, pixelRatio: 1 },
+        webgl: { vendor: 'Google Inc.', renderer: 'ANGLE' },
+        locale: 'en-US'
+      }),
+      JSON.stringify({ timezone: 'America/New_York', language: 'en-US', geolocation: null }),
+      null,
+      Date.now(),
+      Date.now(),
+      null
+    )
+  } finally {
+    db.close()
   }
 }
 
@@ -167,6 +216,72 @@ async function runSmoke(): Promise<void> {
   console.log('E2E_PROXY_VALIDATION', JSON.stringify(res.invalidProxy))
   console.log('E2E_STATUS', JSON.stringify(res.status))
   console.log('E2E_NOTICES', JSON.stringify(res.notices))
+
+  const v2 = await win.webContents.executeJavaScript(
+    `(async () => {
+      const created = await window.api.envCreate({
+        name: 'v2-security-env',
+        shop: { site: 'US', shopIdentifier: 'shop-001', roleNote: '客服' },
+        proxyConfig: {
+          type: 'socks5', host: '127.0.0.1', port: 1, username: 'user', password: 'do-not-return'
+        }
+      })
+      if (!created.ok) return { created }
+      const id = created.data.id
+      const detail = await window.api.envGet({ id })
+      const security = await window.api.envSecurityUpdate({
+        id,
+        status: {
+          twoStepVerification: 'enabled', verificationMethodCount: 2,
+          phoneLinked: 'enabled', loginAlertsEnabled: 'enabled',
+          unknownDevicesReviewedAt: Date.now(), lastSecurityCheckedAt: Date.now(),
+          reVerificationRequired: false
+        }
+      })
+      const totpEnabled = await window.api.envTotpEnable({ id, secret: 'JBSWY3DPEHPK3PXP' })
+      const totpCode = totpEnabled.ok ? await window.api.envTotpCode({ id }) : totpEnabled
+      const totpCleared = totpEnabled.ok ? await window.api.envTotpClear({ id }) : null
+      const afterClear = await window.api.envGet({ id })
+      const deleted = await window.api.envDelete({ id })
+      return { created, detail, security, totpEnabled, totpCode, totpCleared, afterClear, deleted }
+    })()`
+  )
+  console.log(
+    'E2E_V2_SECURITY',
+    JSON.stringify({
+      created: v2.created?.ok,
+      passwordReturned: v2.detail?.ok ? 'password' in (v2.detail.data.proxyConfig ?? {}) : null,
+      security: v2.security?.ok,
+      totpEnabled: v2.totpEnabled?.ok,
+      totpCode: v2.totpCode?.ok && Boolean(v2.totpCode.data.code),
+      totpCleared: v2.totpCleared?.ok,
+      hasTotpAfterClear: v2.afterClear?.ok ? v2.afterClear.data?.hasTotpSecret : null,
+      deleted: v2.deleted?.ok
+    })
+  )
+
+  const legacyImport =
+    v2.created?.ok &&
+    parseTransfer(
+      JSON.stringify({
+        version: 1,
+        environments: [
+          {
+            name: 'legacy-v1-env',
+            remark: '',
+            group: '',
+            fingerprint: v2.created.data.fingerprint,
+            alignFields: v2.created.data.alignFields
+          }
+        ]
+      })
+    )
+  const legacyImportOk =
+    !!legacyImport &&
+    legacyImport.environments.length === 1 &&
+    legacyImport.environments[0].shop.site === 'UNKNOWN' &&
+    legacyImport.environments[0].securityStatus.twoStepVerification === 'unknown'
+  console.log('E2E_V1_IMPORT', JSON.stringify({ legacyImportOk }))
 
   let kernelFailureOk = true
   if (process.env['E2E_KERNEL_FAILURE'] === '1') {
@@ -377,6 +492,30 @@ async function runSmoke(): Promise<void> {
     console.log('E2E_CRASH', JSON.stringify({ id, crashOk, crashState }))
   }
 
+  const v2SecurityOk =
+    v2.created?.ok &&
+    v2.detail?.ok &&
+    v2.detail.data.shop.site === 'US' &&
+    !('password' in (v2.detail.data.proxyConfig ?? {})) &&
+    v2.security?.ok &&
+    v2.security.data.twoStepVerification === 'enabled' &&
+    v2.totpEnabled?.ok &&
+    v2.totpCode?.ok &&
+    /^\d{6}$/.test(v2.totpCode.data.code) &&
+    v2.totpCleared?.ok &&
+    v2.afterClear?.ok &&
+    v2.afterClear.data.hasTotpSecret === false &&
+    v2.deleted?.ok
+  const legacyMigrationOk =
+    process.env['E2E_LEGACY_MIGRATION'] !== '1' ||
+    (res.list0.ok &&
+      res.list0.data.some(
+        (env) =>
+          env.name === 'legacy-db-env' &&
+          env.shop.site === 'UNKNOWN' &&
+          env.expectedEgressIp === null
+      ))
+  console.log('E2E_LEGACY_MIGRATION', JSON.stringify({ legacyMigrationOk }))
   const pingOk = res.ping.ok && res.ping.data.pong === true && res.ping.data.sqlite === true
   const crudOk =
     res.created.ok &&
@@ -402,7 +541,10 @@ async function runSmoke(): Promise<void> {
       runtimeOk &&
       persistenceOk &&
       wipeOk &&
-      crashOk
+      crashOk &&
+      v2SecurityOk &&
+      legacyImportOk &&
+      legacyMigrationOk
       ? 'PASS'
       : 'FAIL'
   )
@@ -415,7 +557,10 @@ async function runSmoke(): Promise<void> {
       runtimeOk &&
       persistenceOk &&
       wipeOk &&
-      crashOk
+      crashOk &&
+      v2SecurityOk &&
+      legacyImportOk &&
+      legacyMigrationOk
       ? 0
       : 1
   )
@@ -455,6 +600,7 @@ app.whenReady().then(() => {
       'userData',
       process.env['E2E_USER_DATA'] ?? join(tmpdir(), `fp-smoke-${Date.now()}`)
     )
+    if (process.env['E2E_LEGACY_MIGRATION'] === '1') seedLegacyDatabase()
   }
 
   const storage = setupStorage()

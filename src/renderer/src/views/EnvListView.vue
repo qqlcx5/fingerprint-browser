@@ -1,5 +1,19 @@
 <script setup lang="ts">
-import { ShieldAlert, ShieldCheck, SlidersHorizontal, Square, Trash2 } from '@lucide/vue'
+import {
+  FileDown,
+  FilePlus2,
+  FileText,
+  FileUp,
+  Pencil,
+  Play,
+  Plus,
+  Power,
+  ShieldAlert,
+  ShieldCheck,
+  SlidersHorizontal,
+  Square,
+  Trash2
+} from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useEnvs } from '../composables/useEnvs'
 import { errorText, pushToast, unwrap } from '../lib/toast'
@@ -9,6 +23,7 @@ import FingerprintModal from '../components/FingerprintModal.vue'
 import EnvFormModal from '../components/EnvFormModal.vue'
 import CountryChangeModal from '../components/CountryChangeModal.vue'
 import SecurityModal from '../components/SecurityModal.vue'
+import ProxyCsvModal from '../components/ProxyCsvModal.vue'
 import { Button } from '../components/ui/button'
 import Modal from '../components/Modal.vue'
 
@@ -26,6 +41,7 @@ const showForm = ref(false)
 const editing = ref<Env | null>(null)
 const fingerprinting = ref<Env | null>(null)
 const securing = ref<Env | null>(null)
+const showProxyCsv = ref(false)
 const deleting = ref<EnvSummary | null>(null)
 const countryChange = ref<CountryChangeInfo | null>(null)
 const busyId = ref<string | null>(null)
@@ -213,6 +229,15 @@ async function confirmBulkDelete(): Promise<void> {
           @click="openLogs"
         >
           <FileText aria-hidden="true" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon-xs"
+          title="批量导入代理并创建环境"
+          aria-label="批量导入代理并创建环境"
+          @click="showProxyCsv = true"
+        >
+          <FilePlus2 aria-hidden="true" />
         </Button>
         <Button
           variant="outline"
@@ -437,6 +462,7 @@ async function confirmBulkDelete(): Promise<void> {
       @saved="refresh"
     />
     <EnvFormModal v-if="showForm" :env="editing" @close="showForm = false" @saved="refresh" />
+    <ProxyCsvModal v-if="showProxyCsv" @close="showProxyCsv = false" @saved="refresh" />
     <SecurityModal v-if="securing" :env="securing" @close="securing = null" @saved="refresh" />
     <CountryChangeModal v-if="countryChange" :info="countryChange" @done="countryChange = null" />
     <Modal

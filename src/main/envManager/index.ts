@@ -12,6 +12,7 @@ import { defineIpc, fail } from '../ipc'
 import { IPC } from '../../shared/types'
 import type {
   AlignConfirmInput,
+  BatchEnvCreateInput,
   CountryChangeInfo,
   Env,
   EnvCreateInput,
@@ -148,6 +149,49 @@ function registerEnvChannels(): void {
       proxyConfig
     })
     return toEnv(record)
+  })
+
+  defineIpc<BatchEnvCreateInput, Env[]>(IPC.envBatchCreate, async (input) => {
+    if (!Array.isArray(input.items) || input.items.length === 0 || input.items.length > 100) {
+      fail('VALIDATION', '批量创建数量必须在 1 到 100 之间')
+    }
+    const dao = getEnvDao()
+    const created: string[] = []
+    const records: Env[] = []
+    const batchEgressIps = new Set<string>()
+    try {
+      for (const item of input.items) {
+        const name = item.name?.trim()
+        if (!name) fail('VALIDATION', '批量创建中存在空环境名称')
+        const binding = await createVerifiedBinding(item.proxyBinding, 'CSV 批量导入')
+        const conflict = dao.getEnvIdByEgressIp(binding.expectedEgressIp)
+        if (conflict || batchEgressIps.has(binding.expectedEgressIp)) {
+          fail('PROXY_IP_CONFLICT', `出口 IP ${binding.expectedEgressIp} 已被其他环境使用`)
+        }
+        batchEgressIps.add(binding.expectedEgressIp)
+        const shop = {
+          site: input.shop?.site ?? 'UNKNOWN',
+          shopIdentifier: item.shopIdentifier?.trim() ?? '',
+          roleNote: input.shop?.roleNote ?? ''
+        }
+        const record = createEnvWithDirs(dao, {
+          name,
+          remark: item.remark ?? '',
+          group: input.group ?? '',
+          shop,
+          fingerprint: generateCoreFingerprint(binding.country),
+          alignFields: alignFieldsForCountry(binding.country),
+          proxyBinding: binding
+        })
+        created.push(record.id)
+        records.push(toEnv(record))
+      }
+      getLogger().info('envManager.batch_created', { count: records.length })
+      return records
+    } catch (error) {
+      for (const id of created.reverse()) deleteEnvWithDirs(dao, id)
+      throw error
+    }
   })
 
   // T2 env:update：名称/备注/代理（国家变更检测收敛到 env:start，见文档决策）

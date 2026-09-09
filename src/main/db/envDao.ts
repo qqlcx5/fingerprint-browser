@@ -280,7 +280,14 @@ function sealProxy(config: ProxyConfig): ProxyConfig {
 }
 
 function unsealProxy(config: ProxyConfig): ProxyConfig {
-  if (!config.password?.startsWith('enc:')) return { ...config }
+  if (typeof config.password !== 'string') {
+    // 早期版本可能留下非字符串密封对象。无法安全解码时保留端点、丢弃密码，
+    // 由界面提示用户重新填写，绝不能让旧记录阻断应用启动。
+    const sanitized = { ...config }
+    delete sanitized.password
+    return sanitized
+  }
+  if (!config.password.startsWith('enc:')) return { ...config }
   if (!safeStorage.isEncryptionAvailable()) {
     throw Object.assign(new Error('操作系统安全存储不可用，无法读取代理密码'), {
       code: 'SECURE_STORAGE_UNAVAILABLE'

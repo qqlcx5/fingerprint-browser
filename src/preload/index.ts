@@ -20,6 +20,7 @@ const api: Api = {
   envList: () => ipcRenderer.invoke(IPC.envList),
   envGet: (input) => ipcRenderer.invoke(IPC.envGet, input),
   envCreate: (input) => ipcRenderer.invoke(IPC.envCreate, input),
+  envBatchCreate: (input) => ipcRenderer.invoke(IPC.envBatchCreate, input),
   envUpdate: (input) => ipcRenderer.invoke(IPC.envUpdate, input),
   envUpdateFingerprint: (input) => ipcRenderer.invoke(IPC.envUpdateFingerprint, input),
   envDelete: (input) => ipcRenderer.invoke(IPC.envDelete, input),

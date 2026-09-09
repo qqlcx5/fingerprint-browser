@@ -40,12 +40,6 @@ const busy = ref(false)
 const testing = ref(false)
 const testResult = ref<{ ip: string; country: string; latencyMs: number } | null>(null)
 const testError = ref<string | null>(null)
-const proxyDirty = ref(!isEdit)
-
-function markDirty(): void {
-  proxyDirty.value = true
-}
-
 function buildProxyConfig(): ProxyConfig | null {
   if (!form.useProxy) return null
   const cfg: ProxyConfig = { type: form.type, host: form.host.trim(), port: Number(form.port) }
@@ -133,14 +127,14 @@ async function onSave(): Promise<void> {
         <input v-model="form.group" type="text" placeholder="如：北美店铺" />
       </label>
       <label class="field field--row">
-        <input v-model="form.useProxy" type="checkbox" @change="markDirty" />
+        <input v-model="form.useProxy" type="checkbox" />
         <span>绑定代理（不绑定则直连，平台将看到本机 IP）</span>
       </label>
       <template v-if="form.useProxy">
         <div class="grid2">
           <label class="field">
             <span>类型</span>
-            <select v-model="form.type" @change="markDirty">
+            <select v-model="form.type">
               <option value="socks5">SOCKS5</option>
               <option value="http">HTTP</option>
               <option value="https">HTTPS</option>
@@ -148,7 +142,7 @@ async function onSave(): Promise<void> {
           </label>
           <label class="field">
             <span>端口</span>
-            <input v-model="form.port" type="text" placeholder="如 1080" @input="markDirty" />
+            <input v-model="form.port" type="text" placeholder="如 1080" />
           </label>
         </div>
         <div class="grid2">
@@ -158,17 +152,16 @@ async function onSave(): Promise<void> {
               v-model="form.host"
               type="text"
               placeholder="如 proxy.example.com"
-              @input="markDirty"
             />
           </label>
           <label class="field">
             <span>账号</span>
-            <input v-model="form.username" type="text" placeholder="可选" @input="markDirty" />
+            <input v-model="form.username" type="text" placeholder="可选" />
           </label>
         </div>
         <label class="field">
           <span>密码</span>
-          <input v-model="form.password" type="text" placeholder="可选" @input="markDirty" />
+          <input v-model="form.password" type="text" placeholder="可选" />
         </label>
         <div class="test">
           <button class="btn" type="button" :disabled="testing" @click="onTest">

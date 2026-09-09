@@ -23,6 +23,7 @@ export {
   type TestEgressOptions
 } from './testEgress'
 export { toPlaywrightProxy, type PlaywrightProxyOptions } from './launchOptions'
+export { needsSocks5Relay, startSocks5Relay, type Socks5Relay } from './relay'
 export { getSystemProxyTransport } from './systemProxy'
 export { ProxyTestError, classifyProxyError, proxyError, type ProxyErrorPhase } from './errors'
 export {

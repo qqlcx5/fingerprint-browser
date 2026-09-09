@@ -4,11 +4,11 @@
  * chromium.launchPersistentContext(userDataDir, { proxy: toPlaywrightProxy(cfg) })。
  * 环境列表的 proxySummary（如 'socks5://1.2.3.4:1080'）也可直接取返回值的 server 字段。
  *
- * ⚠ 已知边界（集成阶段需评估，需求文档 §6.4"含账号密码认证"）：
- * Chromium 原生 --proxy-server 对 SOCKS5 不支持用户名/密码认证（上游限制，
- * Playwright 的 proxy.username/password 仅对 http/https 代理生效）。
- * 本函数保持对 ProxyConfig 的忠实映射，不做隐藏行为；若 M2 验收要求
- * SOCKS5 认证在真实内核内生效，需在 06-launcher 增加"本地中继"方案并在此衔接。
+ * ⚠ 上游限制与兜底（需求文档 §6.4"含账号密码认证"）：
+ * Chromium 原生 --proxy-server 对 SOCKS5 不支持用户名/密码认证，Playwright 的
+ * proxy.username/password 仅对 http/https 代理生效。因此 06-launcher 对
+ * "socks5 + 账密"形态不走本函数，改用 relay.ts 的本地 HTTP 中继
+ * （proxy = { server: 'http://127.0.0.1:{port}' }）；本函数继续服务其余形态。
  */
 import type { ProxyConfig } from '../../shared/types'
 

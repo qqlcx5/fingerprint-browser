@@ -15,7 +15,14 @@ import type { CountryChangeInfo, EgressInfo } from '../../shared/types'
 import type { EnvRecord } from '../db'
 import { getEnvDao, getLogger } from '../db'
 import { ensureKernel } from '../kernel'
-import { testEgress, toPlaywrightProxy, type PlaywrightProxyOptions } from '../proxy'
+import {
+  needsSocks5Relay,
+  startSocks5Relay,
+  testEgress,
+  toPlaywrightProxy,
+  type PlaywrightProxyOptions,
+  type Socks5Relay
+} from '../proxy'
 import { buildFingerprintLaunchOptions, diffAlignCountry, injectFingerprint } from '../fingerprint'
 import { envDownloadsDir, envProfileDir } from '../../shared/paths'
 import { killByProfileDir } from './orphan'
@@ -24,6 +31,17 @@ import { getStatus, setStatus } from './status'
 const contexts = new Map<string, BrowserContext>()
 const launchTokens = new Map<string, symbol>()
 const reportedCrashes = new Set<string>()
+
+/** 每环境至多一个本地 SOCKS5 中继（Chromium 不支持 SOCKS5 账密认证的兜底） */
+const relays = new Map<string, Socks5Relay>()
+
+async function stopRelayFor(id: string): Promise<void> {
+  const relay = relays.get(id)
+  if (!relay) return
+  relays.delete(id)
+  await relay.stop().catch(() => {})
+  getLogger().info('proxy.relay.stopped', { id, port: relay.port })
+}
 
 export function getContext(id: string): BrowserContext | undefined {
   return contexts.get(id)
@@ -81,7 +99,25 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
       const cfg = record.proxyConfig
       egress = await testEgress(cfg)
       if (!isLaunchCurrent(id, token)) failLaunchCancelled()
-      proxy = toPlaywrightProxy(cfg)
+      if (needsSocks5Relay(cfg)) {
+        // Chromium --proxy-server 不支持 SOCKS5 账密认证（上游限制）：
+        // 起本地 HTTP 中继，内核连中继（无认证），中继经带认证的 SOCKS5 隧道转发。
+        await stopRelayFor(id) // 旧启动被取消后可能遗留
+        const relay = await startSocks5Relay(cfg)
+        if (!isLaunchCurrent(id, token)) {
+          await relay.stop().catch(() => {})
+          failLaunchCancelled()
+        }
+        relays.set(id, relay)
+        proxy = { server: `http://127.0.0.1:${relay.port}` }
+        getLogger().info('proxy.relay.started', {
+          id,
+          port: relay.port,
+          upstream: `${cfg.type}://${cfg.host}:${cfg.port}`
+        })
+      } else {
+        proxy = toPlaywrightProxy(cfg)
+      }
     }
 
     // 3. 国家变更检测（不阻塞启动，交给 07 确认流）
@@ -122,7 +158,7 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
 
     // 创建 context 后立即登记与监听，保证注入阶段的异常关闭也能报告。
     contexts.set(id, context)
-    watchContext(id, context)
+    watchContext(id, context, () => void stopRelayFor(id))
 
     // 6. 核心 Chrome 指纹注入（init script，后续所有页面生效）
     await injectFingerprint(context, record.fingerprint)
@@ -148,6 +184,7 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
         await context.close().catch(() => {})
         contexts.delete(id)
       }
+      await stopRelayFor(id)
       setStatus(id, 'idle')
       getLogger().error('launcher.launch_failed', {
         id,
@@ -178,7 +215,7 @@ async function repairGpuCacheDirs(id: string): Promise<void> {
  * context.close 本身不提供退出码；Page 的 crash 事件可识别渲染进程崩溃，
  * 而 running context 的普通 close 仍按“用户关闭浏览器窗口”处理。
  */
-function watchContext(id: string, context: BrowserContext): void {
+function watchContext(id: string, context: BrowserContext, onClosed?: () => void): void {
   const onPageCrash = (): void => {
     const at = getStatus(id)
     if (at === 'idle' || at === 'stopping') return
@@ -190,6 +227,7 @@ function watchContext(id: string, context: BrowserContext): void {
   context.on('page', (page) => page.on('crash', onPageCrash))
   context.on('close', () => {
     contexts.delete(id)
+    onClosed?.()
     const at = getStatus(id)
     if (at === 'stopping') {
       setStatus(id, 'idle')

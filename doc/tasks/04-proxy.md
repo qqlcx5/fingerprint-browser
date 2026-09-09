@@ -33,7 +33,7 @@
 
 ### 已知边界（需集成阶段决策）
 
-1. **SOCKS5 认证 × Chromium 上游限制**：Chromium `--proxy-server` 不支持 SOCKS5 用户名/密码认证，Playwright 的 `proxy.username/password` 仅对 http/https 代理生效。`toPlaywrightProxy` 保持忠实映射；若 M2 验收要求 SOCKS5 认证在真实内核内生效，需 06-launcher 增加"本地中继"方案（**需要协调**）
+1. **SOCKS5 认证 × Chromium 上游限制（已兜底，2026-09-09）**：Chromium `--proxy-server` 不支持 SOCKS5 用户名/密码认证，Playwright 的 `proxy.username/password` 仅对 http/https 代理生效。已实现 `proxy/relay.ts` 本地 HTTP 中继：06-launcher 对"socks5 + 账密"环境在 127.0.0.1 随机端口起无认证本地代理，内核连中继，中继经 tunnel.ts 的带认证 SOCKS5 隧道双向转发；中继随 context 关闭/启动失败清理（`launcher/launch.ts` relays 表）。目标域名经 SOCKS5 ATYP=3 交给代理侧解析，无本地 DNS 泄漏
 2. 双源均成功但国家字段不一致时取首选源（不做仲裁，出口漂移以启动对齐流程为准）
 3. 依赖已冻结，未新增包：隧道协议为手写实现（含 mock E2E 覆盖）
 

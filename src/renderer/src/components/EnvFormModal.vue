@@ -148,11 +148,7 @@ async function onSave(): Promise<void> {
         <div class="grid2">
           <label class="field">
             <span>主机</span>
-            <input
-              v-model="form.host"
-              type="text"
-              placeholder="如 proxy.example.com"
-            />
+            <input v-model="form.host" type="text" placeholder="如 proxy.example.com" />
           </label>
           <label class="field">
             <span>账号</span>

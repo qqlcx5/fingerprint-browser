@@ -143,7 +143,9 @@ export function createEnvDao(db: Database.Database): EnvDao {
       fingerprint: draft.fingerprint,
       alignFields: draft.alignFields,
       proxyConfig: draft.proxyConfig ? { ...draft.proxyConfig } : null,
-      proxyBinding: draft.proxyBinding ? { ...draft.proxyBinding, config: { ...draft.proxyBinding.config } } : null,
+      proxyBinding: draft.proxyBinding
+        ? { ...draft.proxyBinding, config: { ...draft.proxyBinding.config } }
+        : null,
       securityStatus: normalizeSecurityStatus(draft.securityStatus),
       totpSecretRef: draft.totpSecretRef ?? null,
       createdAt: now,
@@ -193,7 +195,10 @@ export function createEnvDao(db: Database.Database): EnvDao {
     if (changes.proxyBinding !== undefined) {
       const binding = changes.proxyBinding
       sets.push('proxy_binding = ?', 'expected_egress_ip = ?')
-      values.push(binding ? JSON.stringify(sealBinding(binding)) : null, binding?.expectedEgressIp ?? null)
+      values.push(
+        binding ? JSON.stringify(sealBinding(binding)) : null,
+        binding?.expectedEgressIp ?? null
+      )
     }
     if (changes.securityStatus !== undefined) {
       sets.push('security_status = ?')
@@ -237,7 +242,15 @@ export function createEnvDao(db: Database.Database): EnvDao {
     return row.id
   }
 
-  return { createEnv, getEnv, listEnvs, updateEnv, updateFingerprint, deleteEnv, getEnvIdByEgressIp }
+  return {
+    createEnv,
+    getEnv,
+    listEnvs,
+    updateEnv,
+    updateFingerprint,
+    deleteEnv,
+    getEnvIdByEgressIp
+  }
 }
 
 function normalizeShop(shop: ShopMetadata | undefined): ShopMetadata {
@@ -340,7 +353,9 @@ function rowToRecord(row: EnvRow): EnvRecord {
     proxyConfig: legacy,
     proxyBinding: binding,
     securityStatus: row.security_status
-      ? normalizeSecurityStatus(parseJson(row.security_status, 'security_status', row.id) as SecurityStatus)
+      ? normalizeSecurityStatus(
+          parseJson(row.security_status, 'security_status', row.id) as SecurityStatus
+        )
       : { ...DEFAULT_SECURITY_STATUS },
     totpSecretRef: row.totp_secret_ref ?? null,
     createdAt: row.created_at,

@@ -8,7 +8,13 @@
  *
  * 接线：src/main/index.ts 中调用 registerProxyIpc()（集成阶段统一接线，见模块 md 末尾说明）
  */
-import { IPC, type EgressInfo, type ProxyTestInput } from '../../shared/types'
+import {
+  IPC,
+  type EgressInfo,
+  type ProxyCsvPreviewInput,
+  type ProxyImportPreview,
+  type ProxyTestInput
+} from '../../shared/types'
 import { getLogger } from '../db'
 import { defineIpc } from '../ipc'
 import { getSystemProxyTransport } from './systemProxy'
@@ -16,6 +22,12 @@ import { testEgress } from './testEgress'
 import { validateProxyConfig } from './validate'
 
 export { validateProxyConfig, PROXY_TYPES } from './validate'
+export {
+  validateProxyBindingInput,
+  previewProxyCsv,
+  createVerifiedBinding,
+  verifyBoundEgress
+} from './binding'
 export {
   testEgress,
   DEFAULT_EGRESS_ENDPOINTS,
@@ -50,5 +62,9 @@ export function registerProxyIpc(): void {
       })
     }
     return testEgress(cfg, { upstreamProxy })
+  })
+
+  defineIpc<ProxyCsvPreviewInput, ProxyImportPreview>(IPC.proxyCsvPreview, async (input) => {
+    return (await import('./binding')).previewProxyCsv(input)
   })
 }

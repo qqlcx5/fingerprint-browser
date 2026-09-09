@@ -98,9 +98,9 @@ function migrate(db: Database.Database): void {
   const additions: Array<[string, string]> = [
     ['proxy_binding', 'TEXT'],
     ['expected_egress_ip', 'TEXT'],
-    ["site", "TEXT NOT NULL DEFAULT 'UNKNOWN'"],
-    ["shop_identifier", "TEXT NOT NULL DEFAULT ''"],
-    ["role_note", "TEXT NOT NULL DEFAULT ''"],
+    ['site', "TEXT NOT NULL DEFAULT 'UNKNOWN'"],
+    ['shop_identifier', "TEXT NOT NULL DEFAULT ''"],
+    ['role_note', "TEXT NOT NULL DEFAULT ''"],
     ['security_status', 'TEXT'],
     ['totp_secret_ref', 'TEXT']
   ]

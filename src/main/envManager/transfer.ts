@@ -36,7 +36,11 @@ function parseTransfer(text: string): EnvTransfer {
     if (typeof item.remark !== 'string' || typeof item.group !== 'string') {
       throw new Error('导入文件的备注或分组不合法')
     }
-    if (!item.shop || typeof item.shop.site !== 'string' || typeof item.shop.shopIdentifier !== 'string') {
+    if (
+      !item.shop ||
+      typeof item.shop.site !== 'string' ||
+      typeof item.shop.shopIdentifier !== 'string'
+    ) {
       throw new Error('导入文件缺少店铺站点或店铺标识')
     }
     const fingerprintError = coreFingerprintError(item.fingerprint)

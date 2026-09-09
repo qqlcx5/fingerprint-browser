@@ -9,8 +9,9 @@
  * 接线：src/main/index.ts 中调用 registerProxyIpc()（集成阶段统一接线，见模块 md 末尾说明）
  */
 import { IPC, type EgressInfo, type ProxyTestInput } from '../../shared/types'
-import { decryptProxyConfig, getEnvDao } from '../db'
+import { decryptProxyConfig, getEnvDao, getLogger } from '../db'
 import { defineIpc } from '../ipc'
+import { getSystemProxyTransport } from './systemProxy'
 import { testEgress } from './testEgress'
 import { validateProxyConfig } from './validate'
 
@@ -22,6 +23,7 @@ export {
   type TestEgressOptions
 } from './testEgress'
 export { toPlaywrightProxy, type PlaywrightProxyOptions } from './launchOptions'
+export { getSystemProxyTransport } from './systemProxy'
 export { ProxyTestError, classifyProxyError, proxyError, type ProxyErrorPhase } from './errors'
 export {
   openProxyTunnel,
@@ -46,6 +48,18 @@ export function registerProxyIpc(): void {
       }
     }
     const cfg = validateProxyConfig(input)
-    return testEgress(cfg)
+    const systemProxy = await getSystemProxyTransport()
+    const upstreamProxy =
+      systemProxy && !(systemProxy.host === cfg.host && systemProxy.port === cfg.port)
+        ? systemProxy
+        : undefined
+    if (upstreamProxy) {
+      getLogger().info('proxy.test.system_proxy_used', {
+        proxyType: upstreamProxy.type,
+        proxyHost: upstreamProxy.host,
+        proxyPort: upstreamProxy.port
+      })
+    }
+    return testEgress(cfg, { upstreamProxy })
   })
 }

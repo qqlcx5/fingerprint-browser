@@ -201,8 +201,37 @@ function basicAuthHeader(cfg: ProxyConfig): string {
   return `Proxy-Authorization: Basic ${token}\r\n`
 }
 
-/** TCP/TLS 连到代理服务器 */
-function connectToProxy(cfg: ProxyConfig, timeoutMs: number): Promise<Socket> {
+export interface ProxyTransport {
+  type: ProxyConfig['type']
+  host: string
+  port: number
+}
+
+/** TCP/TLS 连到代理服务器；有系统上游时，先经上游建立到目标代理的隧道。 */
+async function connectToProxy(
+  cfg: ProxyConfig,
+  timeoutMs: number,
+  upstream?: ProxyTransport
+): Promise<Socket> {
+  const peer = upstream ?? cfg
+  const socket = await connectDirect(peer, timeoutMs)
+  if (!upstream) return socket
+
+  try {
+    if (upstream.type === 'http' || upstream.type === 'https') {
+      await httpConnectHandshake(socket, upstream, cfg.host, cfg.port, timeoutMs)
+    } else {
+      await socks5Handshake(socket, upstream, cfg.host, cfg.port, timeoutMs)
+    }
+    return socket
+  } catch (error) {
+    socket.destroy()
+    throw classifyProxyError(error, 'proxyConnect')
+  }
+}
+
+/** 直接 TCP/TLS 连到指定代理节点。 */
+function connectDirect(cfg: ProxyTransport, timeoutMs: number): Promise<Socket> {
   return new Promise<Socket>((resolve, reject) => {
     const host = bareHost(cfg.host)
     const socket =
@@ -390,10 +419,11 @@ export async function openProxyTunnel(
   cfg: ProxyConfig,
   targetHost: string,
   targetPort: number,
-  timeouts?: TunnelTimeouts
+  timeouts?: TunnelTimeouts,
+  upstream?: ProxyTransport
 ): Promise<Socket> {
   const { connectTimeoutMs } = { ...DEFAULT_TIMEOUTS, ...timeouts }
-  const socket = await connectToProxy(cfg, connectTimeoutMs)
+  const socket = await connectToProxy(cfg, connectTimeoutMs, upstream)
   try {
     if (cfg.type === 'http' || cfg.type === 'https') {
       await httpConnectHandshake(socket, cfg, targetHost, targetPort, connectTimeoutMs)
@@ -502,13 +532,14 @@ export async function httpRequestOverSocket(
 export async function fetchThroughProxy(
   cfg: ProxyConfig,
   url: string | URL,
-  timeouts?: TunnelTimeouts
+  timeouts?: TunnelTimeouts,
+  upstream?: ProxyTransport
 ): Promise<RawHttpResponse> {
   const parsed = typeof url === 'string' ? new URL(url) : url
   const targetPort =
     parsed.port !== '' ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80
   const { responseTimeoutMs } = { ...DEFAULT_TIMEOUTS, ...timeouts }
-  const tunnel = await openProxyTunnel(cfg, parsed.hostname, targetPort, timeouts)
+  const tunnel = await openProxyTunnel(cfg, parsed.hostname, targetPort, timeouts, upstream)
   getLogger().info('proxy.test.target_request_sent', {
     target: parsed.toString(),
     proxyType: cfg.type,

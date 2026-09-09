@@ -21,7 +21,7 @@
 | `errors.ts` | `ProxyTestError` + 四类错误归类（errno/HTTP 状态/SOCKS 回复码 → code + 中文文案） |
 | `validate.ts` | `validateProxyConfig(unknown): ProxyConfig`，字段级错误清单；空字符串认证字段视为未填写，其余必须成对 |
 | `tunnel.ts` | 隧道层：HTTP CONNECT（Basic 认证）/ SOCKS5（RFC 1928 + 1929 认证）手写实现 + 隧道上的最小 HTTP/1.1 客户端（Content-Length/chunked） |
-| `testEgress.ts` | `testEgress(cfg)` → `EgressInfo`；默认双源 `ipinfo.io` + `ipwho.is` 并行，任一成功即返回，全失败按 认证>协议>DNS>超时 优先级汇总上抛 |
+| `testEgress.ts` | `testEgress(cfg)` → `EgressInfo`；默认双源 `api.mir6.com` + `myip.ipip.net`（国内源）并行，任一成功即返回，全失败按 认证>协议>DNS>超时 优先级汇总上抛 |
 | `launchOptions.ts` | `toPlaywrightProxy(cfg)` → `{server, username?, password?}`（server 含 scheme，IPv6 自动补方括号） |
 | `index.ts` | `registerProxyIpc()`：注册 `proxy:test`（validate → testEgress）+ 模块统一出口 |
 

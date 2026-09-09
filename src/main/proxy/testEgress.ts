@@ -12,7 +12,7 @@
 import type { EgressInfo, ProxyConfig } from '../../shared/types'
 import { getLogger } from '../db'
 import { classifyProxyError, proxyError, proxyErrorPriority, ProxyTestError } from './errors'
-import { fetchThroughProxy, type TunnelTimeouts } from './tunnel'
+import { fetchThroughProxy, type ProxyTransport, type TunnelTimeouts } from './tunnel'
 
 export interface EgressEndpoint {
   /** IP 查询接口 URL（GET，返回 JSON） */
@@ -21,21 +21,58 @@ export interface EgressEndpoint {
   parse: (json: Record<string, unknown>) => { ip?: unknown; country?: unknown }
 }
 
-/** 默认双源：均为免费匿名接口，返回 IP + ISO 3166-1 alpha-2 国家码 */
+/** 中文国名 → ISO 3166-1 alpha-2（仅覆盖常见代理出口国家/地区，未命中返回 undefined 由上层兜底为空） */
+const COUNTRY_NAME_TO_ISO: Readonly<Record<string, string>> = {
+  中国: 'CN',
+  香港: 'HK',
+  澳门: 'MO',
+  台湾: 'TW',
+  日本: 'JP',
+  韩国: 'KR',
+  新加坡: 'SG',
+  美国: 'US',
+  加拿大: 'CA',
+  英国: 'GB',
+  德国: 'DE',
+  法国: 'FR',
+  荷兰: 'NL',
+  俄罗斯: 'RU',
+  印度: 'IN',
+  澳大利亚: 'AU',
+  巴西: 'BR',
+  马来西亚: 'MY',
+  泰国: 'TH',
+  越南: 'VN',
+  菲律宾: 'PH',
+  印度尼西亚: 'ID',
+  阿联酋: 'AE',
+  土耳其: 'TR',
+  意大利: 'IT',
+  西班牙: 'ES'
+}
+
+/** 默认双源：国内与海外各一；任一成功即可确认代理可用，同时保留双向网络诊断。 */
 export const DEFAULT_EGRESS_ENDPOINTS: EgressEndpoint[] = [
+  {
+    url: 'https://myip.ipip.net/json',
+    parse: (j) => {
+      const data = j['data'] as Record<string, unknown> | undefined
+      const location = Array.isArray(data?.['location']) ? (data!['location'] as unknown[]) : []
+      const name = typeof location[0] === 'string' ? location[0].trim() : ''
+      return { ip: data?.['ip'], country: COUNTRY_NAME_TO_ISO[name] ?? '' }
+    }
+  },
   {
     url: 'https://ipinfo.io/json',
     parse: (j) => ({ ip: j['ip'], country: j['country'] })
-  },
-  {
-    url: 'https://ipwho.is/',
-    parse: (j) => ({ ip: j['ip'], country: j['country_code'] })
   }
 ]
 
 export interface TestEgressOptions {
   endpoints?: EgressEndpoint[]
   timeouts?: TunnelTimeouts
+  /** Windows/macOS 系统代理的本地节点；用于在未启用 TUN 时转发到用户配置的远端代理。 */
+  upstreamProxy?: ProxyTransport
 }
 
 /** 出口信息校验：ip 必须形如 IPv4/IPv6，country 允许为空字符串（接口偶发缺字段不算失败） */
@@ -55,7 +92,8 @@ function normalizeEgress(ip: unknown, country: unknown, latencyMs: number): Egre
 async function tryEndpoint(
   cfg: ProxyConfig,
   ep: EgressEndpoint,
-  timeouts?: TunnelTimeouts
+  timeouts?: TunnelTimeouts,
+  upstreamProxy?: ProxyTransport
 ): Promise<EgressInfo> {
   const startedAt = performance.now()
   getLogger().info('proxy.test.endpoint_started', {
@@ -65,7 +103,7 @@ async function tryEndpoint(
     proxyPort: cfg.port
   })
   try {
-    const res = await fetchThroughProxy(cfg, ep.url, timeouts)
+    const res = await fetchThroughProxy(cfg, ep.url, timeouts, upstreamProxy)
     if (res.status < 200 || res.status >= 300) {
       throw proxyError('PROXY_PROTOCOL', `出口检测源返回 HTTP ${res.status}`)
     }
@@ -89,36 +127,43 @@ async function tryEndpoint(
   }
 }
 
-/** 测试代理出口：并行请求默认双源，成功即返回；全失败抛分类后的 ProxyTestError */
+/** 测试代理出口：并行请求国内和海外检测源；任一路成功即通过，首个成功源作为出口结果。 */
 export async function testEgress(cfg: ProxyConfig, opts?: TestEgressOptions): Promise<EgressInfo> {
   const endpoints = opts?.endpoints ?? DEFAULT_EGRESS_ENDPOINTS
   if (endpoints.length === 0) throw proxyError('INTERNAL', '出口检测源列表为空')
 
   const settled = await Promise.allSettled(
-    endpoints.map((ep) => tryEndpoint(cfg, ep, opts?.timeouts))
+    endpoints.map((ep) => tryEndpoint(cfg, ep, opts?.timeouts, opts?.upstreamProxy))
   )
 
-  // 首个成功源（endpoints 顺序 = 优先级）
-  for (const s of settled) {
-    if (s.status === 'fulfilled') return s.value
-  }
-
-  // 全部失败：挑最有诊断价值的错误（认证 > 协议 > DNS > 超时）
-  const errors = settled.map((s, index): ProxyTestError => {
-    const error =
-      s.status === 'rejected'
-        ? classifyProxyError(s.reason, 'target')
-        : proxyError('INTERNAL', 'unreachable')
+  const results: EgressInfo[] = []
+  const errors: ProxyTestError[] = []
+  settled.forEach((result, index) => {
+    if (result.status === 'fulfilled') {
+      results.push(result.value)
+      return
+    }
+    const error = classifyProxyError(result.reason, 'target')
     const endpoint = endpoints[index]?.url ?? `出口检测源 #${index + 1}`
     error.message = `${endpoint}：${error.message}`
-    return error
+    errors.push(error)
   })
+
+  if (results.length > 0) {
+    if (errors.length > 0) {
+      getLogger().warn('proxy.test.partial_success', {
+        passed: results.length,
+        total: endpoints.length,
+        failed: errors.map((error) => error.message)
+      })
+    }
+    return results[0]
+  }
+
   const best = errors.reduce((acc, cur) =>
     proxyErrorPriority(cur.code) < proxyErrorPriority(acc.code) ? cur : acc
   )
-  if (errors.length > 1) {
-    const details = errors.map((error) => error.message).join('；')
-    best.message = `代理测试失败：${details}`
-  }
+  const failed = errors.map((error) => error.message).join('；')
+  best.message = `代理测试失败：全部 ${endpoints.length} 个检测源均失败；${failed}`
   throw best
 }

@@ -42,9 +42,19 @@ const CODE_TEXT: Record<AppErrorCode, string> = {
   INTERNAL: '发生未知错误'
 }
 
+const DETAIL_CODES = new Set<AppErrorCode>([
+  'PROXY_AUTH',
+  'PROXY_TIMEOUT',
+  'PROXY_DNS',
+  'PROXY_PROTOCOL',
+  'INTERNAL'
+])
+
 export function errorText(e: AppError): string {
   const base = CODE_TEXT[e.code] ?? `发生未知错误（${e.code}）`
-  return e.message && e.code === 'VALIDATION' ? `${base}：${e.message}` : base
+  if (!e.message) return base
+  if (e.code === 'VALIDATION') return `${base}：${e.message}`
+  return DETAIL_CODES.has(e.code) ? `${base}：${e.message}` : base
 }
 
 /** Result 信封快捷处理：失败弹 toast，成功返回 data */

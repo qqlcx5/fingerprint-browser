@@ -40,6 +40,7 @@ if (isEdit && props.env?.proxyConfig) {
 const busy = ref(false)
 const testing = ref(false)
 const testResult = ref<{ ip: string; country: string; latencyMs: number } | null>(null)
+const testError = ref<string | null>(null)
 const proxyDirty = ref(!isEdit)
 
 function markDirty(): void {
@@ -62,11 +63,24 @@ async function onTest(): Promise<void> {
   }
   testing.value = true
   testResult.value = null
-  const testInput = isEdit && props.env ? { ...cfg, savedPasswordEnvId: props.env.id } : cfg
-  const res = await window.api.proxyTest(testInput)
-  testing.value = false
-  if (res.ok) testResult.value = res.data
-  else pushToast('error', errorText(res.error))
+  testError.value = null
+  try {
+    const testInput = isEdit && props.env ? { ...cfg, savedPasswordEnvId: props.env.id } : cfg
+    const res = await window.api.proxyTest(testInput)
+    if (res.ok) {
+      testResult.value = res.data
+    } else {
+      testError.value = errorText(res.error)
+      pushToast('error', testError.value)
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[proxy:test] IPC 调用异常:', error)
+    testError.value = `代理测试调用失败：${message}`
+    pushToast('error', testError.value)
+  } finally {
+    testing.value = false
+  }
 }
 
 async function onSave(): Promise<void> {
@@ -173,6 +187,7 @@ async function onSave(): Promise<void> {
           <span v-if="testResult" class="test__ok">
             出口 {{ testResult.ip }} · {{ testResult.country }} · {{ testResult.latencyMs }}ms
           </span>
+          <p v-if="testError" class="test__error" role="alert">{{ testError }}</p>
         </div>
       </template>
     </div>
@@ -218,5 +233,13 @@ async function onSave(): Promise<void> {
 .test__ok {
   color: #15803d;
   font-size: 13px;
+}
+.test__error {
+  flex-basis: 100%;
+  margin: 0;
+  color: #b91c1c;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 </style>

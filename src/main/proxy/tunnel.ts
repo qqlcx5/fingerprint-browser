@@ -14,6 +14,7 @@
 import { connect as netConnect, isIP, type Socket } from 'node:net'
 import { connect as tlsConnect } from 'node:tls'
 import type { ProxyConfig } from '../../shared/types'
+import { getLogger } from '../db'
 import { classifyProxyError, proxyError } from './errors'
 
 /** 超时配置：connect 覆盖 TCP/TLS 建连 + 代理握手；response 覆盖请求目标站到响应读完 */
@@ -55,7 +56,10 @@ class SocketReader {
   private sawEnd = false
   private socketError: Error | null = null
 
-  constructor(private socket: Socket) {
+  constructor(
+    private socket: Socket,
+    private readonly closedMessage = '连接在响应读取完成前被关闭'
+  ) {
     socket.on('data', (chunk: Buffer) => {
       this.buf = this.buf.length === 0 ? chunk : Buffer.concat([this.buf, chunk])
       this.drain()
@@ -123,7 +127,7 @@ class SocketReader {
           this.buf = Buffer.alloc(0)
           this.settle(w, out, null)
         } else {
-          this.settle(w, null, proxyError('PROXY_PROTOCOL', '连接在响应读取完成前被关闭'))
+          this.settle(w, null, proxyError('PROXY_PROTOCOL', this.closedMessage))
         }
         continue
       }
@@ -232,7 +236,10 @@ async function httpConnectHandshake(
   targetPort: number,
   timeoutMs: number
 ): Promise<void> {
-  const reader = new SocketReader(socket)
+  const reader = new SocketReader(
+    socket,
+    `HTTP 代理在 CONNECT 握手阶段关闭连接（${cfg.host}:${cfg.port}），未返回 HTTP 状态；请确认代理类型不是 SOCKS5、端口有效且账号/IP 已授权`
+  )
   const authority = authorityOf(targetHost, targetPort)
   socket.write(
     `CONNECT ${authority} HTTP/1.1\r\n` +
@@ -291,7 +298,10 @@ async function socks5Handshake(
   targetPort: number,
   timeoutMs: number
 ): Promise<void> {
-  const reader = new SocketReader(socket)
+  const reader = new SocketReader(
+    socket,
+    `SOCKS5 代理在握手阶段关闭连接（${cfg.host}:${cfg.port}），未返回 SOCKS5 响应；请确认代理类型不是 HTTP、端口有效且账号/IP 已授权`
+  )
   const hasAuth = cfg.username !== undefined && cfg.password !== undefined
   const timeoutErr = (): Error =>
     proxyError('PROXY_TIMEOUT', 'SOCKS5 代理握手响应超时，请检查代理服务商')
@@ -435,7 +445,10 @@ export async function httpRequestOverSocket(
         )
       })
     }
-    const reader = new SocketReader(sock)
+    const reader = new SocketReader(
+      sock,
+      `经 ${url.protocol === 'https:' ? 'HTTPS' : 'HTTP'} 代理访问 ${url.host} 时目标连接被提前关闭`
+    )
     const path = `${url.pathname}${url.search}` || '/'
     const timeoutErr = (): Error =>
       proxyError('PROXY_TIMEOUT', '目标站点响应超时（经代理），请检查代理服务商')
@@ -496,5 +509,11 @@ export async function fetchThroughProxy(
     parsed.port !== '' ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80
   const { responseTimeoutMs } = { ...DEFAULT_TIMEOUTS, ...timeouts }
   const tunnel = await openProxyTunnel(cfg, parsed.hostname, targetPort, timeouts)
+  getLogger().info('proxy.test.target_request_sent', {
+    target: parsed.toString(),
+    proxyType: cfg.type,
+    proxyHost: cfg.host,
+    proxyPort: cfg.port
+  })
   return httpRequestOverSocket(tunnel, parsed, responseTimeoutMs)
 }

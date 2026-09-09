@@ -9,6 +9,8 @@
 import { chromium, type BrowserContext } from 'playwright-core'
 import { broadcast } from '../ipc'
 import { IPC } from '../../shared/types'
+import { rm } from 'fs/promises'
+import { join } from 'path'
 import type { CountryChangeInfo, EgressInfo } from '../../shared/types'
 import type { EnvRecord } from '../db'
 import { decryptProxyConfig, getEnvDao, getLogger } from '../db'
@@ -16,6 +18,7 @@ import { ensureKernel } from '../kernel'
 import { testEgress, toPlaywrightProxy, type PlaywrightProxyOptions } from '../proxy'
 import { buildFingerprintLaunchOptions, diffAlignCountry, injectFingerprint } from '../fingerprint'
 import { envDownloadsDir, envProfileDir } from '../../shared/paths'
+import { killByProfileDir } from './orphan'
 import { getStatus, setStatus } from './status'
 
 const contexts = new Map<string, BrowserContext>()
@@ -85,7 +88,14 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
     const diff = egress ? diffAlignCountry(record.alignFields, egress.country) : null
     const countryChanged = diff && diff.changed ? { envId: id, from: diff.from, to: diff.to } : null
 
-    // 4. 启动：独立 profile + 隔离下载目录 + 指纹/对齐原生选项
+    // 4. 清理残留占用：上次崩溃/强杀后仍存活的内核进程会锁住 profile 缓存目录，
+    //    导致 Chromium「Unable to move the cache (0x5)」与 GPU 缓存创建失败(-2)。
+    //    随后清掉 GPU 着色器缓存目录（体积小、Chromium 自动重建，无用户数据损失）。
+    await killByProfileDir(id)
+    await new Promise((r) => setTimeout(r, 150)) // 等待进程句柄释放
+    await repairGpuCacheDirs(id)
+
+    // 5. 启动：独立 profile + 隔离下载目录 + 指纹/对齐原生选项
     //    下载目录用 playwright 原生 downloadsPath（等价于任务文档中的 CDP
     //    Browser.setDownloadBehavior 方案，无需额外 CDP 会话）
     const fp = buildFingerprintLaunchOptions(record.fingerprint, record.alignFields)
@@ -114,11 +124,11 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
     contexts.set(id, context)
     watchContext(id, context)
 
-    // 5. 核心 Chrome 指纹注入（init script，后续所有页面生效）
+    // 6. 核心 Chrome 指纹注入（init script，后续所有页面生效）
     await injectFingerprint(context, record.fingerprint)
     if (!isLaunchCurrent(id, token)) failLaunchCancelled()
 
-    // 6. running + 落库最后启动时间
+    // 7. running + 落库最后启动时间
     launchTokens.delete(id)
     setStatus(id, 'running')
     dao.updateEnv(id, { lastLaunchedAt: Date.now() })
@@ -147,6 +157,20 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
     }
     throw e
   }
+}
+
+/**
+ * 启动前修复 GPU/着色器缓存目录：被锁死或损坏的缓存目录会导致
+ * 「Unable to move the cache (0x5)」/「Gpu Cache Creation failed: -2」。
+ * 仅删除可再生成的缓存目录，不触碰 Cookies/Local State 等用户数据。
+ */
+async function repairGpuCacheDirs(id: string): Promise<void> {
+  const base = envProfileDir(id)
+  await Promise.all(
+    ['ShaderCache', 'GrShaderCache', 'GraphiteDawnCache', 'DawnCache', 'GPUCache'].map((name) =>
+      rm(join(base, name), { recursive: true, force: true }).catch(() => {})
+    )
+  )
 }
 
 /**

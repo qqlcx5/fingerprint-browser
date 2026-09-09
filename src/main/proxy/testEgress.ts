@@ -10,6 +10,7 @@
  * latencyMs = 该次成功请求从建立隧道到响应读完的总耗时（用户感知的代理延迟）。
  */
 import type { EgressInfo, ProxyConfig } from '../../shared/types'
+import { getLogger } from '../db'
 import { classifyProxyError, proxyError, proxyErrorPriority, ProxyTestError } from './errors'
 import { fetchThroughProxy, type TunnelTimeouts } from './tunnel'
 
@@ -57,18 +58,35 @@ async function tryEndpoint(
   timeouts?: TunnelTimeouts
 ): Promise<EgressInfo> {
   const startedAt = performance.now()
-  const res = await fetchThroughProxy(cfg, ep.url, timeouts)
-  if (res.status < 200 || res.status >= 300) {
-    throw proxyError('PROXY_PROTOCOL', `出口检测源返回 HTTP ${res.status}`)
-  }
-  let json: Record<string, unknown>
+  getLogger().info('proxy.test.endpoint_started', {
+    target: ep.url,
+    proxyType: cfg.type,
+    proxyHost: cfg.host,
+    proxyPort: cfg.port
+  })
   try {
-    json = JSON.parse(res.body) as Record<string, unknown>
-  } catch {
-    throw proxyError('PROXY_PROTOCOL', '出口检测源返回了非 JSON 响应')
+    const res = await fetchThroughProxy(cfg, ep.url, timeouts)
+    if (res.status < 200 || res.status >= 300) {
+      throw proxyError('PROXY_PROTOCOL', `出口检测源返回 HTTP ${res.status}`)
+    }
+    let json: Record<string, unknown>
+    try {
+      json = JSON.parse(res.body) as Record<string, unknown>
+    } catch {
+      throw proxyError('PROXY_PROTOCOL', '出口检测源返回了非 JSON 响应')
+    }
+    const { ip, country } = ep.parse(json)
+    return normalizeEgress(ip, country, performance.now() - startedAt)
+  } catch (error) {
+    const classified = classifyProxyError(error, 'target')
+    getLogger().warn('proxy.test.endpoint_failed', {
+      target: ep.url,
+      code: classified.code,
+      message: classified.message,
+      elapsedMs: Math.round(performance.now() - startedAt)
+    })
+    throw classified
   }
-  const { ip, country } = ep.parse(json)
-  return normalizeEgress(ip, country, performance.now() - startedAt)
 }
 
 /** 测试代理出口：并行请求默认双源，成功即返回；全失败抛分类后的 ProxyTestError */
@@ -86,16 +104,21 @@ export async function testEgress(cfg: ProxyConfig, opts?: TestEgressOptions): Pr
   }
 
   // 全部失败：挑最有诊断价值的错误（认证 > 协议 > DNS > 超时）
-  const errors = settled.map((s): ProxyTestError =>
-    s.status === 'rejected'
-      ? classifyProxyError(s.reason, 'target')
-      : proxyError('INTERNAL', 'unreachable')
-  )
+  const errors = settled.map((s, index): ProxyTestError => {
+    const error =
+      s.status === 'rejected'
+        ? classifyProxyError(s.reason, 'target')
+        : proxyError('INTERNAL', 'unreachable')
+    const endpoint = endpoints[index]?.url ?? `出口检测源 #${index + 1}`
+    error.message = `${endpoint}：${error.message}`
+    return error
+  })
   const best = errors.reduce((acc, cur) =>
     proxyErrorPriority(cur.code) < proxyErrorPriority(acc.code) ? cur : acc
   )
   if (errors.length > 1) {
-    best.message = `${best.message}；全部 ${errors.length} 个出口检测源均失败，请检查代理服务商`
+    const details = errors.map((error) => error.message).join('；')
+    best.message = `代理测试失败：${details}`
   }
   throw best
 }

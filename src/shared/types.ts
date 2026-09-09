@@ -279,6 +279,8 @@ export interface SecurityTodo {
 }
 
 export interface EnvStartResult {
+  /** 已在启动前验证的固定出口 IP；业务环境没有它就不能启动。 */
+  egress: EgressInfo
   countryChanged: CountryChangeInfo | null
   securityTodo: SecurityTodo
 }

@@ -7,13 +7,14 @@ import Modal from './Modal.vue'
 const props = defineProps<{ env: Env }>()
 const emit = defineEmits<{ close: []; saved: [] }>()
 
-const current = props.env.proxyBinding
+const currentBinding = props.env.proxyBinding
+const currentProxy = currentBinding?.config ?? props.env.proxyConfig
 const form = reactive({
-  type: (current?.config.type ?? 'socks5') as ProxyType,
-  networkClass: (current?.networkClass ?? 'static_residential') as ProxyNetworkClass,
-  host: current?.config.host ?? '',
-  port: current ? String(current.config.port) : '',
-  username: current?.config.username ?? '',
+  type: (currentProxy?.type ?? 'socks5') as ProxyType,
+  networkClass: (currentBinding?.networkClass ?? 'static_residential') as ProxyNetworkClass,
+  host: currentProxy?.host ?? '',
+  port: currentProxy ? String(currentProxy.port) : '',
+  username: currentProxy?.username ?? '',
   password: '',
   reason: ''
 })
@@ -67,8 +68,11 @@ async function submit(): Promise<void> {
       <p class="explain">
         只在原代理无法使用或确实要更换时操作。点击确认后系统会验证新代理，验证通过才会保存。
       </p>
-      <p v-if="current" class="current">
-        当前出口：{{ current.expectedEgressIp }} · {{ current.country }}
+      <p v-if="currentBinding" class="current">
+        当前固定出口 IP：{{ currentBinding.expectedEgressIp }} · {{ currentBinding.country }}
+      </p>
+      <p v-else-if="currentProxy" class="current">
+        当前代理尚未固定出口 IP，保存后系统会自动验证并记录。
       </p>
       <div class="grid3">
         <label class="field">
@@ -98,9 +102,7 @@ async function submit(): Promise<void> {
         <input
           v-model="form.password"
           type="password"
-          :placeholder="
-            current?.config.hasPassword ? '留空时自动保留已保存的密码' : '没有密码可留空'
-          "
+          :placeholder="currentProxy?.hasPassword ? '留空时自动保留已保存的密码' : '没有密码可留空'"
         />
       </label>
       <label class="field">

@@ -132,12 +132,13 @@ async function onStart(env: EnvSummary): Promise<void> {
     pushToast('error', errorText(res.error))
     return
   }
+  pushToast(
+    'success',
+    `浏览器已启动，固定出口 IP：${res.data.egress.ip} · ${res.data.egress.country}`
+  )
   if (res.data.countryChanged) countryChange.value = res.data.countryChanged
   if (Object.values(res.data.securityTodo).some(Boolean)) {
     securityTodo.value = res.data.securityTodo
-  }
-  if (!res.data.countryChanged && !Object.values(res.data.securityTodo).some(Boolean)) {
-    pushToast('success', `「${env.name}」已启动`)
   }
   await refresh()
 }
@@ -324,7 +325,7 @@ async function confirmBulkDelete(): Promise<void> {
             </th>
             <th>名称</th>
             <th>店铺</th>
-            <th>代理出口</th>
+            <th>固定出口 IP</th>
             <th>安全</th>
             <th>状态</th>
             <th>最后启动</th>
@@ -353,7 +354,7 @@ async function confirmBulkDelete(): Promise<void> {
             </td>
             <td>
               <span v-if="e.proxySummary" class="mono">{{ e.proxySummary }}</span>
-              <span v-else class="direct">未绑定</span>
+              <span v-else class="direct">请先更换代理</span>
               <div v-if="e.expectedEgressIp" class="remark">
                 {{ e.expectedEgressIp }}{{ e.egressCountry ? ` · ${e.egressCountry}` : '' }}
               </div>

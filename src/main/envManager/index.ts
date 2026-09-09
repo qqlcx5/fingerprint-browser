@@ -36,8 +36,7 @@ import {
   toPublicBinding,
   toPublicProxy,
   type EnvChanges,
-  type EnvRecord,
-  type StoredProxyBinding
+  type EnvRecord
 } from '../db'
 import {
   alignFieldsForCountry,
@@ -227,7 +226,10 @@ function registerEnvChannels(): void {
     const existing = getEnvDao().getEnv(input.id)
     if (!existing) fail('NOT_FOUND', `环境不存在: ${input.id}`)
     const binding = await createVerifiedBinding(
-      proxyBindingWithSavedPassword(input.binding, existing.proxyBinding),
+      proxyBindingWithSavedPassword(
+        input.binding,
+        existing.proxyBinding?.config.password ?? existing.proxyConfig?.password
+      ),
       reason
     )
     const conflict = getEnvDao().getEnvIdByEgressIp(binding.expectedEgressIp, input.id)
@@ -286,11 +288,15 @@ function registerEnvChannels(): void {
     if (st !== 'idle') fail('ENV_NOT_IDLE', `环境非空闲，无法启动（当前: ${st}）`)
     const record = getEnvDao().getEnv(input.id)
     if (!record) fail('NOT_FOUND', `环境不存在: ${input.id}`)
+    if (!record.proxyBinding) {
+      fail('VALIDATION', '该环境未设置固定出口 IP，请先点击“更换代理”')
+    }
     const res = await launchEnv(input.id)
     if (res.countryChanged) {
       pendingAlign.set(input.id, res.countryChanged.to ?? '')
     }
     return {
+      egress: res.egress ?? fail('INTERNAL', '启动后未取得代理出口 IP'),
       countryChanged: res.countryChanged,
       securityTodo: securityTodoFor(record.securityStatus)
     }
@@ -318,14 +324,14 @@ function registerEnvChannels(): void {
 
 function proxyBindingWithSavedPassword(
   input: ProxyRebindInput['binding'],
-  existing: StoredProxyBinding | null
+  savedPassword: string | undefined
 ): ProxyRebindInput['binding'] {
   // 密码属于环境的持久配置：用户留空时始终复用当前保存的密码。
   // 只有明确填写新密码时才覆盖旧值，代理主机或账号变化不影响该规则。
-  if (input.config.password || !existing?.config.password) return input
+  if (input.config.password || !savedPassword) return input
   return {
     ...input,
-    config: { ...input.config, password: existing.config.password }
+    config: { ...input.config, password: savedPassword }
   }
 }
 

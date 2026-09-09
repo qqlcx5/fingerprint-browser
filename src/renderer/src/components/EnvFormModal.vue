@@ -23,7 +23,7 @@ const form = reactive({
     ('proxySummary' in props.env ? !!props.env.proxySummary : !!props.env.proxyConfig)
 })
 
-// 编辑态回填完整代理配置，包括密码。
+// 编辑态仅回填非敏感代理字段。密码不会从主进程返回；留空表示保持原密码。
 if (isEdit && props.env?.proxyConfig) {
   const p = props.env.proxyConfig
   if (p) {
@@ -31,7 +31,7 @@ if (isEdit && props.env?.proxyConfig) {
     form.host = p.host
     form.port = String(p.port)
     form.username = p.username ?? ''
-    form.password = p.password ?? ''
+    form.password = ''
     form.useProxy = true
   }
 }

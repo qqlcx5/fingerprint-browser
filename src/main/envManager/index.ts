@@ -26,6 +26,7 @@ import {
   deleteEnvWithDirs,
   getEnvDao,
   getLogger,
+  toPublicBinding,
   toPublicProxy,
   type EnvChanges,
   type EnvRecord
@@ -47,9 +48,13 @@ function toEnv(r: EnvRecord): Env {
     name: r.name,
     remark: r.remark,
     group: r.group,
+    shop: r.shop,
     fingerprint: r.fingerprint,
     alignFields: r.alignFields,
     proxyConfig: r.proxyConfig ? toPublicProxy(r.proxyConfig) : null,
+    proxyBinding: toPublicBinding(r.proxyBinding),
+    securityStatus: r.securityStatus,
+    hasTotpSecret: r.totpSecretRef !== null,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
     lastLaunchedAt: r.lastLaunchedAt
@@ -57,14 +62,19 @@ function toEnv(r: EnvRecord): Env {
 }
 
 function toSummary(r: EnvRecord): EnvSummary {
-  const p = r.proxyConfig
+  const p = r.proxyBinding?.config ?? r.proxyConfig
   return {
     id: r.id,
     name: r.name,
     remark: r.remark,
     group: r.group,
+    shop: r.shop,
     status: getStatus(r.id),
     proxySummary: p ? `${p.type}://${p.host}:${p.port}` : null,
+    expectedEgressIp: r.proxyBinding?.expectedEgressIp ?? null,
+    egressCountry: r.proxyBinding?.country ?? null,
+    verifiedAt: r.proxyBinding?.verifiedAt ?? null,
+    securityStatus: r.securityStatus,
     lastLaunchedAt: r.lastLaunchedAt
   }
 }
@@ -107,6 +117,11 @@ function registerEnvChannels(): void {
       name,
       remark: input.remark ?? '',
       group: input.group ?? '',
+      shop: {
+        site: input.shop?.site ?? 'UNKNOWN',
+        shopIdentifier: input.shop?.shopIdentifier ?? '',
+        roleNote: input.shop?.roleNote ?? ''
+      },
       fingerprint: generateCoreFingerprint(country),
       alignFields: alignFieldsForCountry(country),
       proxyConfig
@@ -124,6 +139,11 @@ function registerEnvChannels(): void {
     }
     if (input.remark !== undefined) changes.remark = input.remark
     if (input.group !== undefined) changes.group = input.group
+    if (input.shop !== undefined) {
+      const existing = getEnvDao().getEnv(input.id)
+      if (!existing) fail('NOT_FOUND', `环境不存在: ${input.id}`)
+      changes.shop = { ...existing.shop, ...input.shop }
+    }
     if (input.proxyConfig !== undefined) {
       changes.proxyConfig =
         input.proxyConfig === null ? null : validateProxyConfig(input.proxyConfig)

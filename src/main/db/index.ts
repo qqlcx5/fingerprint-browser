@@ -14,8 +14,15 @@ import { openDatabase } from './init'
 import { createEnvDao, type EnvDao } from './envDao'
 import { initLogger, type Logger } from './logger'
 
-export { createEnvDao, toPublicProxy } from './envDao'
-export type { EnvDao, EnvDraft, EnvChanges, EnvRecord, StoredProxyConfig } from './envDao'
+export { createEnvDao, toPublicBinding, toPublicProxy } from './envDao'
+export type {
+  EnvDao,
+  EnvDraft,
+  EnvChanges,
+  EnvRecord,
+  StoredProxyBinding,
+  StoredProxyConfig
+} from './envDao'
 export { createEnvWithDirs, deleteEnvWithDirs, assertSafeEnvId } from './envLifecycle'
 export { getLogger, initLogger } from './logger'
 export type { Logger, LogLevel } from './logger'

@@ -74,6 +74,13 @@ const SCHEMA = `
     fingerprint       TEXT NOT NULL,
     align_fields      TEXT NOT NULL,
     proxy_config      TEXT,
+    proxy_binding     TEXT,
+    expected_egress_ip TEXT,
+    site              TEXT NOT NULL DEFAULT 'UNKNOWN',
+    shop_identifier   TEXT NOT NULL DEFAULT '',
+    role_note         TEXT NOT NULL DEFAULT '',
+    security_status   TEXT,
+    totp_secret_ref   TEXT,
     created_at        INTEGER NOT NULL,
     updated_at        INTEGER NOT NULL,
     last_launched_at  INTEGER
@@ -88,7 +95,24 @@ function migrate(db: Database.Database): void {
   if (!columns.some((column) => column.name === 'group_name')) {
     db.exec("ALTER TABLE environments ADD COLUMN group_name TEXT NOT NULL DEFAULT ''")
   }
+  const additions: Array<[string, string]> = [
+    ['proxy_binding', 'TEXT'],
+    ['expected_egress_ip', 'TEXT'],
+    ["site", "TEXT NOT NULL DEFAULT 'UNKNOWN'"],
+    ["shop_identifier", "TEXT NOT NULL DEFAULT ''"],
+    ["role_note", "TEXT NOT NULL DEFAULT ''"],
+    ['security_status', 'TEXT'],
+    ['totp_secret_ref', 'TEXT']
+  ]
+  for (const [name, declaration] of additions) {
+    if (!columns.some((column) => column.name === name)) {
+      db.exec(`ALTER TABLE environments ADD COLUMN ${name} ${declaration}`)
+    }
+  }
   db.exec('CREATE INDEX IF NOT EXISTS idx_environments_group_name ON environments (group_name)')
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_environments_expected_egress_ip ON environments (expected_egress_ip) WHERE expected_egress_ip IS NOT NULL'
+  )
 }
 
 /** 把损坏库移走：先清 WAL/SHM 边车，主文件改名为 .bak；备份失败也必须移走原文件保应用可用 */

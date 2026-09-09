@@ -16,15 +16,17 @@ function exportRecord(record: EnvRecord): EnvTransfer['environments'][number] {
     name: record.name,
     remark: record.remark,
     group: record.group,
+    shop: record.shop,
     fingerprint: record.fingerprint,
     alignFields: record.alignFields,
-    proxyConfig: record.proxyConfig ? toPublicProxy(record.proxyConfig) : null
+    proxyConfig: record.proxyConfig ? toPublicProxy(record.proxyConfig) : null,
+    securityStatus: record.securityStatus
   }
 }
 
 function parseTransfer(text: string): EnvTransfer {
   const parsed = JSON.parse(text) as Partial<EnvTransfer>
-  if (parsed.version !== 1 || !Array.isArray(parsed.environments)) {
+  if (parsed.version !== 2 || !Array.isArray(parsed.environments)) {
     throw new Error('导入文件格式无效')
   }
   for (const item of parsed.environments) {
@@ -33,6 +35,9 @@ function parseTransfer(text: string): EnvTransfer {
     }
     if (typeof item.remark !== 'string' || typeof item.group !== 'string') {
       throw new Error('导入文件的备注或分组不合法')
+    }
+    if (!item.shop || typeof item.shop.site !== 'string' || typeof item.shop.shopIdentifier !== 'string') {
+      throw new Error('导入文件缺少店铺站点或店铺标识')
     }
     const fingerprintError = coreFingerprintError(item.fingerprint)
     const alignError = alignFieldsError(item.alignFields)
@@ -52,7 +57,7 @@ export async function exportEnvs(): Promise<{ count: number; path: string | null
   })
   if (result.canceled || !result.filePath) return { count: 0, path: null }
   const transfer: EnvTransfer = {
-    version: 1,
+    version: 2,
     environments: getEnvDao().listEnvs().map(exportRecord)
   }
   writeFileSync(result.filePath, `${JSON.stringify(transfer, null, 2)}\n`, 'utf8')
@@ -77,9 +82,11 @@ export async function importEnvs(): Promise<{ count: number; path: string | null
         name: item.name.trim(),
         remark: item.remark,
         group: item.group,
+        shop: item.shop,
         fingerprint: item.fingerprint,
         alignFields: item.alignFields,
-        proxyConfig
+        proxyConfig,
+        securityStatus: item.securityStatus
       })
       created.push(record.id)
     }

@@ -30,6 +30,10 @@ export type AppErrorCode =
   | 'PROXY_TIMEOUT' // 代理连接超时
   | 'PROXY_DNS' // 代理 DNS 解析失败
   | 'PROXY_PROTOCOL' // 代理协议错误
+  | 'PROXY_IP_CONFLICT' // 出口 IP 已绑定给其他业务环境
+  | 'PROXY_EGRESS_CHANGED' // 启动前出口 IP 与绑定值不一致
+  | 'SECURE_STORAGE_UNAVAILABLE' // 操作系统安全存储不可用
+  | 'TOTP_NOT_CONFIGURED' // 未配置可选 TOTP
   | 'COUNTRY_CHANGED' // 代理出口国家变化，需用户确认对齐字段
   | 'DB_CORRUPT' // 数据库损坏（已自动重建后提示）
   | 'NOT_IMPLEMENTED' // 通道已定义但模块未接线（阶段性占位）
@@ -41,20 +45,66 @@ export type Result<T> = { ok: true; data: T } | { ok: false; error: AppError }
 // ---------- 领域模型 ----------
 
 export type ProxyType = 'http' | 'https' | 'socks5'
+export type ProxyNetworkClass = 'static_residential' | 'sticky_residential' | 'isp'
 
 export interface ProxyConfig {
   type: ProxyType
   host: string
   port: number
   username?: string
+  /** 仅用于从渲染层提交到主进程；不得由任何查询、日志或导出接口返回。 */
   password?: string
+}
+
+export interface ProxyBindingInput {
+  config: ProxyConfig
+  networkClass: ProxyNetworkClass
+}
+
+/** 已验证的环境代理绑定。不含密码。 */
+export interface ProxyBinding {
+  config: Omit<ProxyConfig, 'password'> & { hasPassword: boolean }
+  networkClass: ProxyNetworkClass
+  expectedEgressIp: string
+  country: string
+  verifiedAt: number
+  changedAt: number
+  changeReason: string | null
+}
+
+export interface ProxyRebindInput {
+  id: string
+  binding: ProxyBindingInput
+  changeReason: string
+}
+
+export interface ProxyImportRowInput extends ProxyBindingInput {
+  rowNumber: number
+}
+
+export interface ProxyImportPreviewRow {
+  rowNumber: number
+  proxySummary: string | null
+  networkClass: ProxyNetworkClass | null
+  egress: EgressInfo | null
+  error: AppError | null
+  conflictsWithEnvId: string | null
+}
+
+export interface ProxyImportPreview {
+  rows: ProxyImportPreviewRow[]
+  readyCount: number
+}
+
+export interface ProxyCsvPreviewInput {
+  csv: string
 }
 
 /** 代理测试载荷。 */
 export type ProxyTestInput = ProxyConfig
 
-/** 回传给渲染层的代理配置：本地客户端直接回传全部字段（包括密码）。 */
-export type PublicProxyConfig = ProxyConfig
+/** 回传给渲染层的代理配置：绝不包含密码，仅提供是否已配置密码的标记。 */
+export type PublicProxyConfig = Omit<ProxyConfig, 'password'> & { hasPassword: boolean }
 
 /** 代理出口信息（proxy:test 与启动前测连共用） */
 export interface EgressInfo {
@@ -96,14 +146,56 @@ export interface AlignFields {
 export type EnvStatus = 'idle' | 'starting' | 'running' | 'stopping'
 export type EnvStatusMap = Record<string, EnvStatus>
 
+export interface ShopMetadata {
+  /** TikTok Shop 站点代码，如 US、UK、SEA；旧数据迁移为 UNKNOWN。 */
+  site: string
+  /** 店铺 ID 或内部编号，禁止填写平台密码。 */
+  shopIdentifier: string
+  /** 平台子账号角色备注，例如主管理员、财务或客服。 */
+  roleNote: string
+}
+
+export type SecurityToggle = 'unknown' | 'enabled' | 'disabled'
+
+/** 运营者手工确认的状态；不表示应用可读取或控制平台账号安全设置。 */
+export interface SecurityStatus {
+  twoStepVerification: SecurityToggle
+  verificationMethodCount: number
+  phoneLinked: SecurityToggle
+  loginAlertsEnabled: SecurityToggle
+  unknownDevicesReviewedAt: number | null
+  lastSecurityCheckedAt: number | null
+  reVerificationRequired: boolean
+}
+
+export interface SecurityStatusUpdateInput {
+  id: string
+  status: SecurityStatus
+}
+
+export interface TotpEnableInput {
+  id: string
+  secret: string
+}
+
+export interface TotpCode {
+  code: string
+  expiresAt: number
+}
+
 export interface Env {
   id: string
   name: string
   remark: string
   group: string
+  shop: ShopMetadata
   fingerprint: ReadonlyCoreFingerprint
   alignFields: AlignFields
+  /** @deprecated V2 兼容字段；仅安全代理摘要，不含密码。 */
   proxyConfig: PublicProxyConfig | null
+  proxyBinding: ProxyBinding | null
+  securityStatus: SecurityStatus
+  hasTotpSecret: boolean
   createdAt: number
   updatedAt: number
   lastLaunchedAt: number | null
@@ -115,9 +207,14 @@ export interface EnvSummary {
   name: string
   remark: string
   group: string
+  shop: ShopMetadata
   status: EnvStatus
   /** 如 'socks5://1.2.3.4:1080'；无代理（直连）为 null */
   proxySummary: string | null
+  expectedEgressIp: string | null
+  egressCountry: string | null
+  verifiedAt: number | null
+  securityStatus: SecurityStatus
   lastLaunchedAt: number | null
 }
 
@@ -125,6 +222,9 @@ export interface EnvCreateInput {
   name: string
   remark?: string
   group?: string
+  shop?: Partial<ShopMetadata>
+  /** V2 业务环境使用代理绑定；旧 proxyConfig 仅用于兼容导入。 */
+  proxyBinding?: ProxyBindingInput | null
   proxyConfig?: ProxyConfig | null
 }
 
@@ -133,6 +233,7 @@ export interface EnvUpdateInput {
   name?: string
   remark?: string
   group?: string
+  shop?: Partial<ShopMetadata>
   proxyConfig?: ProxyConfig | null
 }
 
@@ -189,14 +290,17 @@ export interface StartupNotice {
 }
 
 export interface EnvTransfer {
-  version: 1
+  version: 2
   environments: Array<{
     name: string
     remark: string
     group: string
+    shop: ShopMetadata
     fingerprint: CoreFingerprint
     alignFields: AlignFields
+    /** 导出不携带代理认证、绑定出口或 TOTP；导入后必须重新验证。 */
     proxyConfig: PublicProxyConfig | null
+    securityStatus: SecurityStatus
   }>
 }
 
@@ -230,6 +334,13 @@ export const IPC = {
   envStop: 'env:stop',
   envStatus: 'env:status',
   proxyTest: 'proxy:test',
+  proxyCsvPreview: 'proxy:csv-preview',
+  envProxyRebind: 'env:proxy-rebind',
+  envSecurityGet: 'env:security-get',
+  envSecurityUpdate: 'env:security-update',
+  envTotpEnable: 'env:totp-enable',
+  envTotpClear: 'env:totp-clear',
+  envTotpCode: 'env:totp-code',
   browserEnsure: 'browser:ensure',
   alignConfirm: 'align:confirm',
   appNotices: 'app:notices',
@@ -260,6 +371,13 @@ export const INVOKE_CHANNELS: IpcChannel[] = [
   IPC.envStop,
   IPC.envStatus,
   IPC.proxyTest,
+  IPC.proxyCsvPreview,
+  IPC.envProxyRebind,
+  IPC.envSecurityGet,
+  IPC.envSecurityUpdate,
+  IPC.envTotpEnable,
+  IPC.envTotpClear,
+  IPC.envTotpCode,
   IPC.browserEnsure,
   IPC.alignConfirm,
   IPC.appNotices,
@@ -289,6 +407,13 @@ export interface IpcPayloadMap {
   [IPC.envStop]: IdInput
   [IPC.envStatus]: undefined
   [IPC.proxyTest]: ProxyTestInput
+  [IPC.proxyCsvPreview]: ProxyCsvPreviewInput
+  [IPC.envProxyRebind]: ProxyRebindInput
+  [IPC.envSecurityGet]: IdInput
+  [IPC.envSecurityUpdate]: SecurityStatusUpdateInput
+  [IPC.envTotpEnable]: TotpEnableInput
+  [IPC.envTotpClear]: IdInput
+  [IPC.envTotpCode]: IdInput
   [IPC.browserEnsure]: undefined
   [IPC.alignConfirm]: AlignConfirmInput
   [IPC.appNotices]: undefined
@@ -313,6 +438,13 @@ export interface IpcDataMap {
   [IPC.envStop]: { id: string }
   [IPC.envStatus]: EnvStatusMap
   [IPC.proxyTest]: EgressInfo
+  [IPC.proxyCsvPreview]: ProxyImportPreview
+  [IPC.envProxyRebind]: Env
+  [IPC.envSecurityGet]: SecurityStatus
+  [IPC.envSecurityUpdate]: SecurityStatus
+  [IPC.envTotpEnable]: { id: string }
+  [IPC.envTotpClear]: { id: string }
+  [IPC.envTotpCode]: TotpCode
   [IPC.browserEnsure]: KernelInfo
   [IPC.alignConfirm]: { id: string }
   [IPC.appNotices]: StartupNotice[]
@@ -342,6 +474,13 @@ export interface Api {
   envStop(input: IdInput): Promise<Result<{ id: string }>>
   envStatus(): Promise<Result<EnvStatusMap>>
   proxyTest(input: ProxyTestInput): Promise<Result<EgressInfo>>
+  proxyCsvPreview(input: ProxyCsvPreviewInput): Promise<Result<ProxyImportPreview>>
+  envProxyRebind(input: ProxyRebindInput): Promise<Result<Env>>
+  envSecurityGet(input: IdInput): Promise<Result<SecurityStatus>>
+  envSecurityUpdate(input: SecurityStatusUpdateInput): Promise<Result<SecurityStatus>>
+  envTotpEnable(input: TotpEnableInput): Promise<Result<{ id: string }>>
+  envTotpClear(input: IdInput): Promise<Result<{ id: string }>>
+  envTotpCode(input: IdInput): Promise<Result<TotpCode>>
   browserEnsure(): Promise<Result<KernelInfo>>
   alignConfirm(input: AlignConfirmInput): Promise<Result<{ id: string }>>
   /** 启动期一次性通知（DB 重置、加密降级等）；渲染层挂载后拉取一次，读后清空 */

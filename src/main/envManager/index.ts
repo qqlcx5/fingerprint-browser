@@ -13,9 +13,9 @@ import { IPC } from '../../shared/types'
 import type {
   AlignConfirmInput,
   BatchEnvCreateInput,
-  CountryChangeInfo,
   Env,
   EnvCreateInput,
+  EnvStartResult,
   EnvSummary,
   EnvUpdateInput,
   FingerprintUpdateInput,
@@ -23,6 +23,7 @@ import type {
   ProxyRebindInput,
   SecurityStatus,
   SecurityStatusUpdateInput,
+  SecurityTodo,
   StartupNotice,
   TotpCode,
   TotpEnableInput
@@ -276,14 +277,19 @@ function registerEnvChannels(): void {
   })
 
   // T4 env:start：launchEnv 内含内核→代理→注入全流水线；lastLaunchedAt 已落库
-  defineIpc<IdInput, CountryChangeInfo | null>(IPC.envStart, async (input) => {
+  defineIpc<IdInput, EnvStartResult>(IPC.envStart, async (input) => {
     const st = getStatus(input.id)
     if (st !== 'idle') fail('ENV_NOT_IDLE', `环境非空闲，无法启动（当前: ${st}）`)
+    const record = getEnvDao().getEnv(input.id)
+    if (!record) fail('NOT_FOUND', `环境不存在: ${input.id}`)
     const res = await launchEnv(input.id)
     if (res.countryChanged) {
       pendingAlign.set(input.id, res.countryChanged.to ?? '')
     }
-    return res.countryChanged
+    return {
+      countryChanged: res.countryChanged,
+      securityTodo: securityTodoFor(record.securityStatus)
+    }
   })
 
   // T4 env:stop
@@ -304,6 +310,15 @@ function registerEnvChannels(): void {
 
   // T7 env:status：内存状态表（UI 首屏来源）
   defineIpc(IPC.envStatus, () => getStatusMap())
+}
+
+function securityTodoFor(status: SecurityStatus): SecurityTodo {
+  return {
+    twoStepVerification: status.twoStepVerification !== 'enabled',
+    phoneLinked: status.phoneLinked !== 'enabled',
+    loginAlertsEnabled: status.loginAlertsEnabled !== 'enabled',
+    reVerificationRequired: status.reVerificationRequired
+  }
 }
 
 function registerAppChannels(): void {

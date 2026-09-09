@@ -8,6 +8,7 @@ import {
   Play,
   Plus,
   Power,
+  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   SlidersHorizontal,
@@ -17,13 +18,14 @@ import {
 import { computed, onMounted, ref } from 'vue'
 import { useEnvs } from '../composables/useEnvs'
 import { errorText, pushToast, unwrap } from '../lib/toast'
-import type { CountryChangeInfo, Env, EnvSummary } from '@shared/types'
+import type { CountryChangeInfo, Env, EnvSummary, SecurityTodo } from '@shared/types'
 import StatusBadge from '../components/StatusBadge.vue'
 import FingerprintModal from '../components/FingerprintModal.vue'
 import EnvFormModal from '../components/EnvFormModal.vue'
 import CountryChangeModal from '../components/CountryChangeModal.vue'
 import SecurityModal from '../components/SecurityModal.vue'
 import ProxyCsvModal from '../components/ProxyCsvModal.vue'
+import ProxyRebindModal from '../components/ProxyRebindModal.vue'
 import { Button } from '../components/ui/button'
 import Modal from '../components/Modal.vue'
 
@@ -42,8 +44,10 @@ const editing = ref<Env | null>(null)
 const fingerprinting = ref<Env | null>(null)
 const securing = ref<Env | null>(null)
 const showProxyCsv = ref(false)
+const rebinding = ref<Env | null>(null)
 const deleting = ref<EnvSummary | null>(null)
 const countryChange = ref<CountryChangeInfo | null>(null)
+const securityTodo = ref<SecurityTodo | null>(null)
 const busyId = ref<string | null>(null)
 const query = ref('')
 const groupFilter = ref('')
@@ -117,6 +121,11 @@ async function openSecurity(env: EnvSummary): Promise<void> {
   if (detail) securing.value = detail
 }
 
+async function openRebind(env: EnvSummary): Promise<void> {
+  const detail = await unwrap(window.api.envGet({ id: env.id }))
+  if (detail) rebinding.value = detail
+}
+
 async function onStart(env: EnvSummary): Promise<void> {
   busyId.value = env.id
   const res = await window.api.envStart({ id: env.id })
@@ -125,9 +134,13 @@ async function onStart(env: EnvSummary): Promise<void> {
     pushToast('error', errorText(res.error))
     return
   }
-  if (res.data)
-    countryChange.value = res.data // §6.5 确认流
-  else pushToast('success', `「${env.name}」已启动`)
+  if (res.data.countryChanged) countryChange.value = res.data.countryChanged
+  if (Object.values(res.data.securityTodo).some(Boolean)) {
+    securityTodo.value = res.data.securityTodo
+  }
+  if (!res.data.countryChanged && !Object.values(res.data.securityTodo).some(Boolean)) {
+    pushToast('success', `「${env.name}」已启动`)
+  }
   await refresh()
 }
 
@@ -402,6 +415,16 @@ async function confirmBulkDelete(): Promise<void> {
                   variant="ghost"
                   size="icon-xs"
                   :disabled="e.status !== 'idle'"
+                  :aria-label="`重新绑定代理：${e.name}`"
+                  :title="`重新绑定代理：${e.name}`"
+                  @click="openRebind(e)"
+                >
+                  <RefreshCw aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  :disabled="e.status !== 'idle'"
                   :aria-label="`管理账号安全：${e.name}`"
                   :title="`管理账号安全：${e.name}`"
                   @click="openSecurity(e)"
@@ -437,6 +460,21 @@ async function confirmBulkDelete(): Promise<void> {
     </div>
 
     <Modal
+      v-if="securityTodo"
+      title="账号安全待办"
+      confirm-text="知道了"
+      @confirm="securityTodo = null"
+      @cancel="securityTodo = null"
+    >
+      <p>环境已启动。请在 TikTok Shop Seller Center 完成以下项目：</p>
+      <ul class="todo-list">
+        <li v-if="securityTodo.twoStepVerification">启用两步验证</li>
+        <li v-if="securityTodo.phoneLinked">绑定手机号</li>
+        <li v-if="securityTodo.loginAlertsEnabled">开启登录提醒</li>
+        <li v-if="securityTodo.reVerificationRequired">完成平台要求的重新验证</li>
+      </ul>
+    </Modal>
+    <Modal
       v-if="bulkDeletePending"
       title="确认批量删除"
       danger
@@ -463,6 +501,12 @@ async function confirmBulkDelete(): Promise<void> {
     />
     <EnvFormModal v-if="showForm" :env="editing" @close="showForm = false" @saved="refresh" />
     <ProxyCsvModal v-if="showProxyCsv" @close="showProxyCsv = false" @saved="refresh" />
+    <ProxyRebindModal
+      v-if="rebinding"
+      :env="rebinding"
+      @close="rebinding = null"
+      @saved="refresh"
+    />
     <SecurityModal v-if="securing" :env="securing" @close="securing = null" @saved="refresh" />
     <CountryChangeModal v-if="countryChange" :info="countryChange" @done="countryChange = null" />
     <Modal
@@ -642,6 +686,12 @@ h1 {
 .security--warning {
   color: #b42318;
   font-weight: 600;
+}
+.todo-list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  color: #4b5563;
+  line-height: 1.8;
 }
 .empty {
   display: flex;

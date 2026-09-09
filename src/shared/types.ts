@@ -271,6 +271,18 @@ export interface CountryChangeInfo {
   to: string | null
 }
 
+export interface SecurityTodo {
+  twoStepVerification: boolean
+  phoneLinked: boolean
+  loginAlertsEnabled: boolean
+  reVerificationRequired: boolean
+}
+
+export interface EnvStartResult {
+  countryChanged: CountryChangeInfo | null
+  securityTodo: SecurityTodo
+}
+
 export interface DownloadProgress {
   received: number
   total: number
@@ -449,7 +461,7 @@ export interface IpcDataMap {
   [IPC.envUpdate]: Env
   [IPC.envUpdateFingerprint]: Env
   [IPC.envDelete]: { id: string }
-  [IPC.envStart]: CountryChangeInfo | null // null = 直接启动成功
+  [IPC.envStart]: EnvStartResult // countryChanged 为 null = 无地区确认
   [IPC.envStop]: { id: string }
   [IPC.envStatus]: EnvStatusMap
   [IPC.proxyTest]: EgressInfo
@@ -485,8 +497,8 @@ export interface Api {
   envUpdate(input: EnvUpdateInput): Promise<Result<Env>>
   envUpdateFingerprint(input: FingerprintUpdateInput): Promise<Result<Env>>
   envDelete(input: IdInput): Promise<Result<{ id: string }>>
-  /** 返回 null = 直接启动成功；返回 CountryChangeInfo = 需确认对齐字段 */
-  envStart(input: IdInput): Promise<Result<CountryChangeInfo | null>>
+  /** 返回地区确认与账号安全待办；待办仅提示，不干预平台验证流程。 */
+  envStart(input: IdInput): Promise<Result<EnvStartResult>>
   envStop(input: IdInput): Promise<Result<{ id: string }>>
   envStatus(): Promise<Result<EnvStatusMap>>
   proxyTest(input: ProxyTestInput): Promise<Result<EgressInfo>>

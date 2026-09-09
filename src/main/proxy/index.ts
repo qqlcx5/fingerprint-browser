@@ -17,6 +17,7 @@ import {
 } from '../../shared/types'
 import { getLogger } from '../db'
 import { defineIpc } from '../ipc'
+import { previewProxyCsv } from './binding'
 import { getSystemProxyTransport } from './systemProxy'
 import { testEgress } from './testEgress'
 import { validateProxyConfig } from './validate'
@@ -65,6 +66,6 @@ export function registerProxyIpc(): void {
   })
 
   defineIpc<ProxyCsvPreviewInput, ProxyImportPreview>(IPC.proxyCsvPreview, async (input) => {
-    return (await import('./binding')).previewProxyCsv(input)
+    return previewProxyCsv(input)
   })
 }

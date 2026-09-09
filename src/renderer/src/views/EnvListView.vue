@@ -1,17 +1,5 @@
 <script setup lang="ts">
-import {
-  FileDown,
-  FileText,
-  FileUp,
-  Pencil,
-  Play,
-  Plus,
-  Power,
-  ShieldAlert,
-  SlidersHorizontal,
-  Square,
-  Trash2
-} from '@lucide/vue'
+import { ShieldAlert, ShieldCheck, SlidersHorizontal, Square, Trash2 } from '@lucide/vue'
 import { computed, onMounted, ref } from 'vue'
 import { useEnvs } from '../composables/useEnvs'
 import { errorText, pushToast, unwrap } from '../lib/toast'
@@ -20,6 +8,7 @@ import StatusBadge from '../components/StatusBadge.vue'
 import FingerprintModal from '../components/FingerprintModal.vue'
 import EnvFormModal from '../components/EnvFormModal.vue'
 import CountryChangeModal from '../components/CountryChangeModal.vue'
+import SecurityModal from '../components/SecurityModal.vue'
 import { Button } from '../components/ui/button'
 import Modal from '../components/Modal.vue'
 
@@ -36,6 +25,7 @@ const {
 const showForm = ref(false)
 const editing = ref<Env | null>(null)
 const fingerprinting = ref<Env | null>(null)
+const securing = ref<Env | null>(null)
 const deleting = ref<EnvSummary | null>(null)
 const countryChange = ref<CountryChangeInfo | null>(null)
 const busyId = ref<string | null>(null)
@@ -57,7 +47,7 @@ const filteredRows = computed(() => {
   return rows.value.filter((row) => {
     const matchesGroup = !groupFilter.value || row.group === groupFilter.value
     const haystack =
-      `${row.name} ${row.remark} ${row.group} ${row.proxySummary ?? ''}`.toLowerCase()
+      `${row.name} ${row.remark} ${row.group} ${row.shop.site} ${row.shop.shopIdentifier} ${row.shop.roleNote} ${row.proxySummary ?? ''} ${row.expectedEgressIp ?? ''} ${row.egressCountry ?? ''}`.toLowerCase()
     return matchesGroup && (!q || haystack.includes(q))
   })
 })
@@ -104,6 +94,11 @@ async function openEdit(env: EnvSummary): Promise<void> {
 async function openFingerprint(env: EnvSummary): Promise<void> {
   const detail = await unwrap(window.api.envGet({ id: env.id }))
   if (detail) fingerprinting.value = detail
+}
+
+async function openSecurity(env: EnvSummary): Promise<void> {
+  const detail = await unwrap(window.api.envGet({ id: env.id }))
+  if (detail) securing.value = detail
 }
 
 async function onStart(env: EnvSummary): Promise<void> {
@@ -292,7 +287,9 @@ async function confirmBulkDelete(): Promise<void> {
               <input type="checkbox" :checked="allVisibleSelected" @change="toggleAllVisible" />
             </th>
             <th>名称</th>
-            <th>代理</th>
+            <th>店铺</th>
+            <th>代理出口</th>
+            <th>安全</th>
             <th>状态</th>
             <th>最后启动</th>
             <th class="th-actions">操作</th>
@@ -314,8 +311,31 @@ async function confirmBulkDelete(): Promise<void> {
               <div v-if="e.remark" class="remark">{{ e.remark }}</div>
             </td>
             <td>
+              <div class="mono">{{ e.shop.site }}</div>
+              <div v-if="e.shop.shopIdentifier" class="remark">{{ e.shop.shopIdentifier }}</div>
+              <div v-if="e.shop.roleNote" class="remark">{{ e.shop.roleNote }}</div>
+            </td>
+            <td>
               <span v-if="e.proxySummary" class="mono">{{ e.proxySummary }}</span>
-              <span v-else class="direct">直连</span>
+              <span v-else class="direct">未绑定</span>
+              <div v-if="e.expectedEgressIp" class="remark">
+                {{ e.expectedEgressIp }}{{ e.egressCountry ? ` · ${e.egressCountry}` : '' }}
+              </div>
+              <div v-if="e.verifiedAt" class="remark">验证：{{ fmtTime(e.verifiedAt) }}</div>
+            </td>
+            <td>
+              <span
+                :class="[
+                  'security',
+                  e.securityStatus.reVerificationRequired ? 'security--warning' : ''
+                ]"
+              >
+                {{
+                  e.securityStatus.reVerificationRequired
+                    ? '需重新验证'
+                    : `2SV：${e.securityStatus.twoStepVerification}`
+                }}
+              </span>
             </td>
             <td><StatusBadge :status="e.status" /></td>
             <td class="muted">{{ fmtTime(e.lastLaunchedAt) }}</td>
@@ -352,6 +372,16 @@ async function confirmBulkDelete(): Promise<void> {
                   @click="openEdit(e)"
                 >
                   <Pencil aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  :disabled="e.status !== 'idle'"
+                  :aria-label="`管理账号安全：${e.name}`"
+                  :title="`管理账号安全：${e.name}`"
+                  @click="openSecurity(e)"
+                >
+                  <ShieldCheck aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -407,6 +437,7 @@ async function confirmBulkDelete(): Promise<void> {
       @saved="refresh"
     />
     <EnvFormModal v-if="showForm" :env="editing" @close="showForm = false" @saved="refresh" />
+    <SecurityModal v-if="securing" :env="securing" @close="securing = null" @saved="refresh" />
     <CountryChangeModal v-if="countryChange" :info="countryChange" @done="countryChange = null" />
     <Modal
       v-if="deleting"
@@ -576,6 +607,15 @@ h1 {
 .direct {
   color: #9a6700;
   font-size: 12px;
+}
+.security {
+  color: #4b5563;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.security--warning {
+  color: #b42318;
+  font-weight: 600;
 }
 .empty {
   display: flex;

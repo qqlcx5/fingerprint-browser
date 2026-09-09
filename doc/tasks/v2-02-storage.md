@@ -7,10 +7,10 @@
 
 ## 任务清单
 
-- [ ] T1 为 environments 表增加 `site`、`shop_identifier`、`role_note`、`security_status` 和 `totp_secret_ref` 字段；为 `expected_egress_ip` 建唯一索引，并写可重复执行的 schema migration。
-- [ ] T2 将代理配置拆分或规范化为 `ProxyBinding` 持久化模型，保存 `networkClass`、出口 IP、国家、验证时间、变更时间和变更原因；认证凭据只保存安全存储引用或密封值。
-- [ ] T3 更新 DAO 与导入导出转换：旧环境回退到 `site=UNKNOWN`、无安全状态、无绑定出口；导出绝不包含密码、TOTP 引用、Cookie、审计日志或登录态。
-- [ ] T4 完成目录与删除流程：删除环境、清除本地数据、导入失败回滚时，清理 Profile、下载目录和关联安全存储引用。
+- [x] T1 为 environments 表增加 `site`、`shop_identifier`、`role_note`、`security_status` 和 `totp_secret_ref` 字段；为 `expected_egress_ip` 建唯一索引，并写可重复执行的 schema migration。
+- [x] T2 将代理配置拆分或规范化为 `ProxyBinding` 持久化模型，保存 `networkClass`、出口 IP、国家、验证时间、变更时间和变更原因；认证凭据只保存安全存储引用或密封值。
+- [x] T3 更新 DAO 与导入导出转换：旧环境回退到 `site=UNKNOWN`、无安全状态、无绑定出口；导出绝不包含密码、TOTP 引用、Cookie、审计日志或登录态。
+- [x] T4 完成目录与删除流程：删除环境、清除本地数据、导入失败回滚时，清理 Profile、下载目录和关联安全存储引用。
 - [ ] T5 增加 SQLite 迁移和 DAO 测试，覆盖旧库升级、出口 IP 重复拒绝、空出口开发环境、导入回滚和敏感字段不导出。
 
 ## 验收

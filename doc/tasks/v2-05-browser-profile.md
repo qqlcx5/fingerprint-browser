@@ -7,10 +7,10 @@
 
 ## 任务清单
 
-- [ ] T1 审计并移除 Canvas/Audio/WebGL 噪声、`navigator.webdriver` 修改、`--disable-blink-features=AutomationControlled` 与其他自动化特征规避参数。
-- [ ] T2 将浏览器配置收敛为持久化的 UA、语言、时区、窗口尺寸、分辨率、像素比和可选地理位置；确保重启不重新随机生成。
-- [ ] T3 保持每环境独立 persistent Profile 与下载目录；验证 Cookie、LocalStorage、IndexedDB、Service Worker 和下载文件隔离。
-- [ ] T4 按店铺站点与代理出口国家生成/建议语言和时区；国家不一致时只产生警告，不能修改核心配置或阻断启动。
+- [x] T1 审计并移除 Canvas/Audio/WebGL 噪声、`navigator.webdriver` 修改、`--disable-blink-features=AutomationControlled` 与其他自动化特征规避参数。
+- [x] T2 将浏览器配置收敛为持久化的 UA、语言、时区、窗口尺寸、分辨率、像素比和可选地理位置；确保重启不重新随机生成。
+- [ ] T3 保持每环境独立 persistent Profile 与下载目录；验证 Cookie、LocalStorage、IndexedDB、Service Worker 和下载文件隔离。现有冒烟仅覆盖 Cookie/下载目录，仍需补齐其余存储类型回归。
+- [x] T4 按店铺站点与代理出口国家生成/建议语言和时区；国家不一致时只产生警告，不能修改核心配置或阻断启动。
 - [ ] T5 更新指纹/隔离回归脚本，覆盖三次重启稳定性、两环境数据隔离、主动清除后登录态消失和无反检测注入。
 
 ## 验收

@@ -15,6 +15,7 @@ import { createEnvDao, type EnvDao } from './envDao'
 import { initLogger, type Logger } from './logger'
 
 export { createEnvDao, toPublicBinding, toPublicProxy } from './envDao'
+export { DEFAULT_SECURITY_STATUS, DEFAULT_SHOP } from './envDao'
 export type {
   EnvDao,
   EnvDraft,

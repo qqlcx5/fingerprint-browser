@@ -44,7 +44,13 @@ if (isEdit && props.env?.proxyBinding) {
 const busy = ref(false)
 const testing = ref(false)
 const testResult = ref<{ ip: string; country: string; latencyMs: number } | null>(null)
+const testedBindingKey = ref<string | null>(null)
 const testError = ref<string | null>(null)
+function bindingKey(): string | null {
+  const cfg = buildProxyConfig()
+  if (!cfg) return null
+  return `${form.networkClass}|${cfg.type}|${cfg.host}|${cfg.port}|${cfg.username ?? ''}|${cfg.password ?? ''}`
+}
 function buildProxyConfig(): ProxyConfig | null {
   if (!form.useProxy) return null
   const cfg: ProxyConfig = { type: form.type, host: form.host.trim(), port: Number(form.port) }
@@ -61,11 +67,13 @@ async function onTest(): Promise<void> {
   }
   testing.value = true
   testResult.value = null
+  testedBindingKey.value = null
   testError.value = null
   try {
     const res = await window.api.proxyTest(cfg)
     if (res.ok) {
       testResult.value = res.data
+      testedBindingKey.value = bindingKey()
     } else {
       testError.value = errorText(res.error)
       pushToast('error', testError.value)
@@ -85,6 +93,21 @@ async function onSave(): Promise<void> {
   if (!name) {
     pushToast('error', '环境名称不能为空')
     return
+  }
+  if (!isEdit && (!form.useProxy || !testResult.value || testedBindingKey.value !== bindingKey())) {
+    pushToast('error', '创建业务环境前请先完成当前代理的测试连接')
+    return
+  }
+  if (
+    !isEdit &&
+    form.site.trim() &&
+    testResult.value?.country &&
+    form.site.trim().toUpperCase() !== testResult.value.country
+  ) {
+    pushToast(
+      'info',
+      `店铺站点 ${form.site.trim().toUpperCase()} 与代理出口 ${testResult.value.country} 不一致，请确认`
+    )
   }
   // 业务环境仅通过已声明类别的代理绑定创建；编辑代理改由专用重绑定流程处理。
   const proxyBinding = form.useProxy

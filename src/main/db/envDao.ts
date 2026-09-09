@@ -13,20 +13,12 @@ import type Database from 'better-sqlite3'
 import type {
   AlignFields,
   ProxyConfig,
-  ProxyType,
   PublicProxyConfig,
   ReadonlyCoreFingerprint
 } from '../../shared/types'
-import { encryptSecret, decryptSecret, type SealedSecret } from './secret'
 
-/** 入库形态：代理密码已加密，永不存明文（§8） */
-export interface StoredProxyConfig {
-  type: ProxyType
-  host: string
-  port: number
-  username?: string
-  password?: SealedSecret
-}
+/** 入库形态：代理配置以普通 JSON 存储。 */
+export interface StoredProxyConfig extends ProxyConfig {}
 
 /** 出库形态：DB 记录的领域对象（指纹与对齐字段已反序列化） */
 export interface EnvRecord {
@@ -57,7 +49,7 @@ export interface EnvChanges {
   name?: string
   remark?: string
   group?: string
-  /** 代理整体替换；null = 清除代理；undefined = 不变。密码在落库前加密 */
+  /** 代理整体替换；null = 清除代理；undefined = 不变。 */
   proxyConfig?: ProxyConfig | null
   /** 仅 align:confirm 确认流（07-T3）可更新对齐字段 */
   alignFields?: AlignFields
@@ -115,7 +107,7 @@ export function createEnvDao(db: Database.Database): EnvDao {
       group: draft.group?.trim() ?? '',
       fingerprint: draft.fingerprint,
       alignFields: draft.alignFields,
-      proxyConfig: draft.proxyConfig ? sealProxy(draft.proxyConfig) : null,
+      proxyConfig: draft.proxyConfig ? storeProxy(draft.proxyConfig) : null,
       createdAt: now,
       updatedAt: now,
       lastLaunchedAt: null
@@ -153,13 +145,8 @@ export function createEnvDao(db: Database.Database): EnvDao {
       values.push(changes.group.trim())
     }
     if (changes.proxyConfig !== undefined) {
-      const current = getEnv(id)
       sets.push('proxy_config = ?')
-      values.push(
-        changes.proxyConfig
-          ? JSON.stringify(sealProxy(changes.proxyConfig, current?.proxyConfig))
-          : null
-      )
+      values.push(changes.proxyConfig ? JSON.stringify(storeProxy(changes.proxyConfig)) : null)
     }
     if (changes.alignFields !== undefined) {
       sets.push('align_fields = ?')
@@ -195,20 +182,8 @@ export function createEnvDao(db: Database.Database): EnvDao {
   return { createEnv, getEnv, listEnvs, updateEnv, updateFingerprint, deleteEnv }
 }
 
-function sealProxy(config: ProxyConfig, previous?: StoredProxyConfig | null): StoredProxyConfig {
-  const stored: StoredProxyConfig = {
-    type: config.type,
-    host: config.host,
-    port: config.port,
-    ...(config.username !== undefined ? { username: config.username } : {})
-  }
-  if (config.password) {
-    stored.password = encryptSecret(config.password)
-  } else if (previous?.password) {
-    // 编辑接口不会回传密码；留空表示保留已有密文。移除整个代理时仍由 null 显式处理。
-    stored.password = previous.password
-  }
-  return stored
+function storeProxy(config: ProxyConfig): StoredProxyConfig {
+  return { ...config }
 }
 
 function recordToRow(record: EnvRecord): Record<string, unknown> {
@@ -254,28 +229,7 @@ function rowToRecord(row: EnvRow): EnvRecord {
 
 // ---------- 供 06/07 组装使用的转换（不经过 DAO 状态） ----------
 
-/** 转渲染层可见形态：密码永不回传，仅带 hasPassword 标记（§8） */
+/** 本地客户端直接回传代理配置。 */
 export function toPublicProxy(stored: StoredProxyConfig | null): PublicProxyConfig | null {
-  if (!stored) return null
-  return {
-    type: stored.type,
-    host: stored.host,
-    port: stored.port,
-    ...(stored.username !== undefined ? { username: stored.username } : {}),
-    hasPassword: Boolean(stored.password)
-  }
-}
-
-/**
- * 解密代理密码，得到完整 ProxyConfig。
- * 明文仅限主进程内存（06 启动注入、07 代理测试使用）；禁止回传渲染层或写日志。
- */
-export function decryptProxyConfig(stored: StoredProxyConfig): ProxyConfig {
-  return {
-    type: stored.type,
-    host: stored.host,
-    port: stored.port,
-    ...(stored.username !== undefined ? { username: stored.username } : {}),
-    ...(stored.password ? { password: decryptSecret(stored.password) } : {})
-  }
+  return stored ? { ...stored } : null
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import type { Env, ProxyConfig, ProxyType, PublicProxyConfig } from '@shared/types'
+import type { Env, ProxyConfig, ProxyType } from '@shared/types'
 import { errorText, pushToast } from '../lib/toast'
 import Modal from './Modal.vue'
 
@@ -23,16 +23,15 @@ const form = reactive({
     ('proxySummary' in props.env ? !!props.env.proxySummary : !!props.env.proxyConfig)
 })
 
-// 编辑态回填。PublicProxyConfig 不含密码（§8 永不回传）；密码输入框留空表示保留已存密码。
-const savedProxy = ref<PublicProxyConfig | null>(null)
+// 编辑态回填完整代理配置，包括密码。
 if (isEdit && props.env?.proxyConfig) {
   const p = props.env.proxyConfig
   if (p) {
-    savedProxy.value = p
     form.type = p.type
     form.host = p.host
     form.port = String(p.port)
     form.username = p.username ?? ''
+    form.password = p.password ?? ''
     form.useProxy = true
   }
 }
@@ -65,8 +64,7 @@ async function onTest(): Promise<void> {
   testResult.value = null
   testError.value = null
   try {
-    const testInput = isEdit && props.env ? { ...cfg, savedPasswordEnvId: props.env.id } : cfg
-    const res = await window.api.proxyTest(testInput)
+    const res = await window.api.proxyTest(cfg)
     if (res.ok) {
       testResult.value = res.data
     } else {
@@ -89,14 +87,8 @@ async function onSave(): Promise<void> {
     pushToast('error', '环境名称不能为空')
     return
   }
-  // 代理提交语义：
-  // - 新建：useProxy 即提交（或 null 直连）
-  // - 编辑且未动代理字段：省略 proxyConfig（原配置保持不变）
-  // - 编辑且改动代理字段：密码留空则由主进程保留已有密文
-  let proxyConfig: ProxyConfig | null | undefined
-  if (!isEdit || proxyDirty.value || (form.useProxy === false && savedProxy.value)) {
-    proxyConfig = form.useProxy ? buildProxyConfig() : null
-  }
+  // 本地配置直接整体保存，编辑与创建行为一致。
+  const proxyConfig = form.useProxy ? buildProxyConfig() : null
   busy.value = true
   const payload = {
     name,
@@ -175,10 +167,8 @@ async function onSave(): Promise<void> {
           </label>
         </div>
         <label class="field">
-          <span
-            >密码{{ savedProxy?.hasPassword ? '（已安全保存，留空保持不变）' : '（可选）' }}</span
-          >
-          <input v-model="form.password" type="password" placeholder="可选" @input="markDirty" />
+          <span>密码</span>
+          <input v-model="form.password" type="text" placeholder="可选" @input="markDirty" />
         </label>
         <div class="test">
           <button class="btn" type="button" :disabled="testing" @click="onTest">

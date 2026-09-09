@@ -92,7 +92,7 @@ function openCreate(): void {
   showForm.value = true
 }
 
-// 编辑需要完整 Env（含 hasPassword 标记），列表行只有摘要 → 先 envGet 取详情
+// 编辑需要完整 Env，先 envGet 取详情。
 async function openEdit(env: EnvSummary): Promise<void> {
   const detail = await unwrap(window.api.envGet({ id: env.id }))
   if (detail) {

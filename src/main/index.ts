@@ -1,4 +1,4 @@
-import { app, safeStorage, shell, BrowserWindow, Menu, Tray } from 'electron'
+import { app, shell, BrowserWindow, Menu, Tray } from 'electron'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import { createRequire } from 'module'
@@ -20,6 +20,14 @@ import { setFingerprintWarningSink } from './fingerprint'
 import icon from '../../resources/icon.png?asset'
 
 const nodeRequire = createRequire(__filename)
+
+// 开发实例不复用正式应用的 Chromium 缓存，避免多次启动或遗留权限导致 0x5 Access denied。
+if (is.dev) {
+  const devSessionData = join(tmpdir(), 'fingerprint-browser-dev', `session-${process.pid}`)
+  app.setPath('sessionData', devSessionData)
+  app.commandLine.appendSwitch('disk-cache-dir', join(devSessionData, 'Cache'))
+}
+
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
@@ -454,9 +462,6 @@ app.whenReady().then(() => {
   if (storage.reset) {
     // §9：库损坏已自动重建 → 启动期通知，渲染层挂载后拉取（07-T9）
     pushNotice('db_reset', '数据库曾损坏，已自动重建；环境列表为空属预期')
-  }
-  if (!safeStorage.isEncryptionAvailable()) {
-    pushNotice('weak_encryption', '系统安全加密不可用，代理密码将以混淆方式存储（§8）')
   }
   // 运行状态初始化（§5：不落库，启动时全部 idle）+ 孤儿 Chromium 清理（06-T1/T5）
   initStatuses(

@@ -40,7 +40,7 @@ import { getStatus, getStatusMap, launchEnv, stopEnv } from '../launcher'
 import { drainNotices, pushNotice } from './notices'
 import { wipeAllData } from './wipe'
 
-/** DB 记录 → 渲染层 Env（密码永不回传，仅 hasPassword 标记，§8） */
+/** DB 记录 → 渲染层 Env（包含完整本地代理配置）。 */
 function toEnv(r: EnvRecord): Env {
   return {
     id: r.id,
@@ -76,7 +76,7 @@ function registerEnvChannels(): void {
   // T6 env:list：DB join 内存运行状态
   defineIpc(IPC.envList, (): EnvSummary[] => getEnvDao().listEnvs().map(toSummary))
 
-  // env:get 详情（编辑弹窗需要完整字段，含 hasPassword 标记；07 集成时补的契约）
+  // env:get 详情（编辑弹窗需要完整代理字段）
   defineIpc<IdInput, Env | null>(IPC.envGet, (input) => {
     const r = getEnvDao().getEnv(input.id)
     return r ? toEnv(r) : null

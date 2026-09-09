@@ -1,7 +1,7 @@
 /**
  * 环境启动流水线（06-T2）
  *
- * 顺序：状态置 starting → 内核就绪 → 代理测连（解密仅内存）→ 国家变更检测
+ * 顺序：状态置 starting → 内核就绪 → 代理测连 → 国家变更检测
  *   → launchPersistentContext（指纹/对齐原生选项 + 隔离下载目录）→ 指纹注入
  *   → running + lastLaunchedAt 落库 → 挂接关闭/崩溃钩子
  * 任何一步失败：状态回 idle，错误（code 已由下层给定）原样上抛给 07。
@@ -13,7 +13,7 @@ import { rm } from 'fs/promises'
 import { join } from 'path'
 import type { CountryChangeInfo, EgressInfo } from '../../shared/types'
 import type { EnvRecord } from '../db'
-import { decryptProxyConfig, getEnvDao, getLogger } from '../db'
+import { getEnvDao, getLogger } from '../db'
 import { ensureKernel } from '../kernel'
 import { testEgress, toPlaywrightProxy, type PlaywrightProxyOptions } from '../proxy'
 import { buildFingerprintLaunchOptions, diffAlignCountry, injectFingerprint } from '../fingerprint'
@@ -74,11 +74,11 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
       throw Object.assign(new Error('内核路径缺失'), { code: 'KERNEL_CORRUPT' })
     }
 
-    // 2. 代理测连（有代理才测；明文密码仅在本次调用内存中出现）
+    // 2. 代理测连
     let egress: EgressInfo | null = null
     let proxy: PlaywrightProxyOptions | undefined
     if (record.proxyConfig) {
-      const cfg = decryptProxyConfig(record.proxyConfig)
+      const cfg = record.proxyConfig
       egress = await testEgress(cfg)
       if (!isLaunchCurrent(id, token)) failLaunchCancelled()
       proxy = toPlaywrightProxy(cfg)

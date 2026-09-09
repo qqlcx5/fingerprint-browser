@@ -50,16 +50,11 @@ export interface ProxyConfig {
   password?: string
 }
 
-/**
- * 代理测试载荷。编辑既有环境时可带来源环境 ID，让主进程仅在内存中复用其已加密密码；
- * 密码本身绝不回传渲染层。
- */
-export interface ProxyTestInput extends ProxyConfig {
-  savedPasswordEnvId?: string
-}
+/** 代理测试载荷。 */
+export type ProxyTestInput = ProxyConfig
 
-/** 回传给渲染层的代理配置：密码永不回传（需求文档 §8） */
-export type PublicProxyConfig = Omit<ProxyConfig, 'password'> & { hasPassword: boolean }
+/** 回传给渲染层的代理配置：本地客户端直接回传全部字段（包括密码）。 */
+export type PublicProxyConfig = ProxyConfig
 
 /** 代理出口信息（proxy:test 与启动前测连共用） */
 export interface EgressInfo {

@@ -60,11 +60,11 @@ async function test(): Promise<void> {
 
 async function submit(): Promise<void> {
   if (!form.reason.trim()) {
-    pushToast('error', '请填写代理变更原因')
+    pushToast('error', '请填写更换原因')
     return
   }
   if (!testResult.value || testedKey.value !== key()) {
-    pushToast('error', '请先测试当前代理后再重新绑定')
+    pushToast('error', '请先测试当前代理后再更换')
     return
   }
   busy.value = true
@@ -86,13 +86,16 @@ async function submit(): Promise<void> {
 
 <template>
   <Modal
-    title="重新绑定代理"
+    title="更换代理"
     :busy="busy"
-    confirm-text="确认重绑定"
+    confirm-text="确认更换"
     @confirm="submit"
     @cancel="emit('close')"
   >
     <div class="form">
+      <p class="explain">
+        只在原代理无法使用或需要更换时操作。更换后，环境会固定使用新的出口地址。
+      </p>
       <p v-if="current" class="current">
         当前出口：{{ current.expectedEgressIp }} · {{ current.country }}
       </p>
@@ -124,8 +127,8 @@ async function submit(): Promise<void> {
         ><input v-model="form.password" type="password" placeholder="必须重新填写以验证"
       /></label>
       <label class="field"
-        ><span>变更原因</span
-        ><input v-model="form.reason" type="text" placeholder="如：原代理出口变化"
+        ><span>更换原因</span
+        ><input v-model="form.reason" type="text" placeholder="如：原代理无法使用"
       /></label>
       <div class="test">
         <button class="btn" type="button" :disabled="testing" @click="test">
@@ -144,6 +147,12 @@ async function submit(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.explain {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .current {
   margin: 0;

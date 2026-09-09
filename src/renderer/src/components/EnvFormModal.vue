@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import type { Env, ProxyConfig, ProxyNetworkClass, ProxyType } from '@shared/types'
+import type { Env, ProxyNetworkClass, ProxyType } from '@shared/types'
 import { errorText, pushToast } from '../lib/toast'
 import Modal from './Modal.vue'
 
@@ -21,25 +21,8 @@ const form = reactive({
   host: '',
   port: '',
   username: '',
-  password: '',
-  useProxy:
-    !!props.env &&
-    ('proxySummary' in props.env ? !!props.env.proxySummary : !!props.env.proxyBinding)
+  password: ''
 })
-
-// 编辑态仅回填非敏感代理字段。密码不会从主进程返回；留空表示保持原密码。
-if (isEdit && props.env?.proxyBinding) {
-  const p = props.env.proxyBinding.config
-  if (p) {
-    form.type = p.type
-    form.host = p.host
-    form.port = String(p.port)
-    form.username = p.username ?? ''
-    form.password = ''
-    form.networkClass = props.env.proxyBinding.networkClass
-    form.useProxy = true
-  }
-}
 
 const busy = ref(false)
 const testing = ref(false)
@@ -47,21 +30,21 @@ const testResult = ref<{ ip: string; country: string; latencyMs: number } | null
 const testedBindingKey = ref<string | null>(null)
 const testError = ref<string | null>(null)
 function bindingKey(): string | null {
-  const cfg = buildProxyConfig()
-  if (!cfg) return null
-  return `${form.networkClass}|${cfg.type}|${cfg.host}|${cfg.port}|${cfg.username ?? ''}|${cfg.password ?? ''}`
-}
-function buildProxyConfig(): ProxyConfig | null {
-  if (!form.useProxy) return null
-  const cfg: ProxyConfig = { type: form.type, host: form.host.trim(), port: Number(form.port) }
-  if (form.username) cfg.username = form.username
-  if (form.password) cfg.password = form.password
-  return cfg
+  const host = form.host.trim()
+  const port = Number(form.port)
+  if (!host || !port) return null
+  return `${form.networkClass}|${form.type}|${host}|${port}|${form.username}|${form.password}`
 }
 
 async function onTest(): Promise<void> {
-  const cfg = buildProxyConfig()
-  if (!cfg || !cfg.host || !cfg.port) {
+  const cfg = {
+    type: form.type,
+    host: form.host.trim(),
+    port: Number(form.port),
+    ...(form.username ? { username: form.username } : {}),
+    ...(form.password ? { password: form.password } : {})
+  }
+  if (!cfg.host || !cfg.port) {
     pushToast('error', '请先填写代理主机与端口')
     return
   }
@@ -94,7 +77,7 @@ async function onSave(): Promise<void> {
     pushToast('error', '环境名称不能为空')
     return
   }
-  if (!isEdit && (!form.useProxy || !testResult.value || testedBindingKey.value !== bindingKey())) {
+  if (!isEdit && (!testResult.value || testedBindingKey.value !== bindingKey())) {
     pushToast('error', '创建业务环境前请先完成当前代理的测试连接')
     return
   }
@@ -109,10 +92,18 @@ async function onSave(): Promise<void> {
       `店铺站点 ${form.site.trim().toUpperCase()} 与代理出口 ${testResult.value.country} 不一致，请确认`
     )
   }
-  // 业务环境仅通过已声明类别的代理绑定创建；编辑代理改由专用重绑定流程处理。
-  const proxyBinding = form.useProxy
-    ? { config: buildProxyConfig()!, networkClass: form.networkClass }
-    : null
+  const proxyBinding = isEdit
+    ? undefined
+    : {
+        config: {
+          type: form.type,
+          host: form.host.trim(),
+          port: Number(form.port),
+          ...(form.username ? { username: form.username } : {}),
+          ...(form.password ? { password: form.password } : {})
+        },
+        networkClass: form.networkClass
+      }
   busy.value = true
   const payload = {
     name,
@@ -175,11 +166,19 @@ async function onSave(): Promise<void> {
         <span>子账号角色备注</span>
         <input v-model="form.roleNote" type="text" placeholder="如：主管理员、财务、客服" />
       </label>
-      <label class="field field--row">
-        <input v-model="form.useProxy" type="checkbox" />
-        <span>绑定代理（不绑定则直连，平台将看到本机 IP）</span>
-      </label>
-      <template v-if="form.useProxy">
+      <template v-if="isEdit">
+        <div class="saved-proxy">
+          <strong>当前代理</strong>
+          <span v-if="env?.proxyBinding">
+            {{ env.proxyBinding.config.type }}://{{ env.proxyBinding.config.host }}:{{
+              env.proxyBinding.config.port
+            }}
+            <br />出口 {{ env.proxyBinding.expectedEgressIp }} · {{ env.proxyBinding.country }}
+          </span>
+          <span v-else>未绑定代理</span>
+        </div>
+      </template>
+      <template v-else>
         <div class="grid2">
           <label class="field">
             <span>类型</span>
@@ -214,7 +213,7 @@ async function onSave(): Promise<void> {
         </div>
         <label class="field">
           <span>密码</span>
-          <input v-model="form.password" type="password" placeholder="可选；编辑留空不改" />
+          <input v-model="form.password" type="password" placeholder="可选" />
         </label>
         <div class="test">
           <button class="btn" type="button" :disabled="testing" @click="onTest">
@@ -247,6 +246,16 @@ async function onSave(): Promise<void> {
   flex-direction: row;
   align-items: center;
   gap: 8px;
+}
+.saved-proxy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 10px;
+  color: #4b5563;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .field input[type='text'],
 .field input[type='password'],

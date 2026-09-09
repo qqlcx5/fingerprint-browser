@@ -11,7 +11,6 @@ import {
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
-  SlidersHorizontal,
   Square,
   Trash2
 } from '@lucide/vue'
@@ -20,7 +19,6 @@ import { useEnvs } from '../composables/useEnvs'
 import { errorText, pushToast, unwrap } from '../lib/toast'
 import type { CountryChangeInfo, Env, EnvSummary, SecurityTodo } from '@shared/types'
 import StatusBadge from '../components/StatusBadge.vue'
-import FingerprintModal from '../components/FingerprintModal.vue'
 import EnvFormModal from '../components/EnvFormModal.vue'
 import CountryChangeModal from '../components/CountryChangeModal.vue'
 import SecurityModal from '../components/SecurityModal.vue'
@@ -41,7 +39,6 @@ const {
 // 弹窗状态
 const showForm = ref(false)
 const editing = ref<Env | null>(null)
-const fingerprinting = ref<Env | null>(null)
 const securing = ref<Env | null>(null)
 const showProxyCsv = ref(false)
 const rebinding = ref<Env | null>(null)
@@ -109,11 +106,6 @@ async function openEdit(env: EnvSummary): Promise<void> {
     editing.value = detail
     showForm.value = true
   }
-}
-
-async function openFingerprint(env: EnvSummary): Promise<void> {
-  const detail = await unwrap(window.api.envGet({ id: env.id }))
-  if (detail) fingerprinting.value = detail
 }
 
 async function openSecurity(env: EnvSummary): Promise<void> {
@@ -415,8 +407,8 @@ async function confirmBulkDelete(): Promise<void> {
                   variant="ghost"
                   size="icon-xs"
                   :disabled="e.status !== 'idle'"
-                  :aria-label="`重新绑定代理：${e.name}`"
-                  :title="`重新绑定代理：${e.name}`"
+                  :aria-label="`更换代理：${e.name}`"
+                  :title="`更换代理：${e.name}`"
                   @click="openRebind(e)"
                 >
                   <RefreshCw aria-hidden="true" />
@@ -430,16 +422,6 @@ async function confirmBulkDelete(): Promise<void> {
                   @click="openSecurity(e)"
                 >
                   <ShieldCheck aria-hidden="true" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  :disabled="e.status !== 'idle'"
-                  :aria-label="`编辑核心指纹：${e.name}`"
-                  :title="`编辑核心指纹：${e.name}`"
-                  @click="openFingerprint(e)"
-                >
-                  <SlidersHorizontal aria-hidden="true" />
                 </Button>
                 <Button
                   variant="ghost"
@@ -493,12 +475,6 @@ async function confirmBulkDelete(): Promise<void> {
     >
       <pre class="logs">{{ logLines.join('\n') || '暂无日志' }}</pre>
     </Modal>
-    <FingerprintModal
-      v-if="fingerprinting"
-      :env="fingerprinting"
-      @close="fingerprinting = null"
-      @saved="refresh"
-    />
     <EnvFormModal v-if="showForm" :env="editing" @close="showForm = false" @saved="refresh" />
     <ProxyCsvModal v-if="showProxyCsv" @close="showProxyCsv = false" @saved="refresh" />
     <ProxyRebindModal

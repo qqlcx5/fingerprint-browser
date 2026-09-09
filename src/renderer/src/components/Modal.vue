@@ -1,5 +1,5 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   title: string
   confirmText?: string
   cancelText?: string
@@ -8,11 +8,15 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
+
+function cancelFromBackdrop(): void {
+  if (!props.busy) emit('cancel')
+}
 </script>
 
 <template>
-  <div class="modal-mask" @click.self="emit('cancel')">
-    <div class="modal" role="dialog" :aria-label="title">
+  <div class="modal-mask" @pointerdown.self="cancelFromBackdrop">
+    <div class="modal" role="dialog" aria-modal="true" :aria-label="title">
       <h3 class="modal__title">{{ title }}</h3>
       <div class="modal__body"><slot /></div>
       <div class="modal__actions">

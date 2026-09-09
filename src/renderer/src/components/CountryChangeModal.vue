@@ -14,7 +14,7 @@ async function answer(accept: boolean): Promise<void> {
   const res = await window.api.alignConfirm({ id: props.info.envId, accept })
   busy.value = false
   if (res.ok) {
-    pushToast('info', accept ? `已更新对齐字段（时区/语言），下次启动生效` : '已保留原对齐字段')
+    pushToast('info', accept ? '已更新地区设置，下次打开环境时生效' : '已保持原来的地区设置')
   }
   emit('done')
 }
@@ -24,7 +24,7 @@ async function answer(accept: boolean): Promise<void> {
   <Modal
     title="代理出口地区已变化"
     :busy="busy"
-    confirm-text="更新对齐字段"
+    confirm-text="更新地区设置"
     @confirm="answer(true)"
     @cancel="answer(false)"
   >
@@ -34,8 +34,7 @@ async function answer(accept: boolean): Promise<void> {
       >。
     </p>
     <p class="hint">
-      「更新对齐字段」仅调整时区 / 语言 / 定位等派生配置以匹配新地区；核心指纹（UA / 屏幕 /
-      硬件）保持不变。本次会话仍使用旧对齐字段，下次启动生效。
+      这不会更换代理，也不会影响已保存的店铺资料。只是把浏览器显示的语言、时区和定位建议改成更接近新出口地区的设置；下次打开环境时生效。
     </p>
   </Modal>
 </template>

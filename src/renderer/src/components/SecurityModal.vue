@@ -136,28 +136,33 @@ async function clearTotp(): Promise<void> {
 
       <div class="totp">
         <div class="totp__head">
-          <strong>可选 TOTP</strong>
+          <strong>动态验证码（可选）</strong>
           <span>{{ env.hasTotpSecret ? '已启用' : '未启用' }}</span>
         </div>
+        <p class="hint">
+          只有店铺使用验证器 App 时才需要。默认不保存；启用后会加密保存在这台电脑。
+        </p>
         <template v-if="env.hasTotpSecret">
-          <button class="btn" type="button" @click="showCode">显示动态码</button>
+          <button class="btn" type="button" @click="showCode">显示动态验证码</button>
           <p v-if="codeText" class="code" aria-live="polite">{{ codeText }}</p>
-          <button class="btn btn--danger" type="button" @click="clearTotp">清除本机密钥</button>
+          <button class="btn btn--danger" type="button" @click="clearTotp">
+            删除本机验证码设置
+          </button>
         </template>
         <template v-else>
           <button class="btn" type="button" @click="showTotpSetup = !showTotpSetup">
-            启用本机 TOTP
+            启用本机动态验证码
           </button>
           <div v-if="showTotpSetup" class="totp__setup">
             <input
               v-model="totpSecret"
               type="password"
-              placeholder="Base32 密钥"
+              placeholder="验证器 App 的设置密钥"
               autocomplete="off"
             />
             <label class="check">
               <input v-model="confirmTotp" type="checkbox" />
-              <span>我确认仅在受控设备上保存，并了解删除环境会销毁该密钥</span>
+              <span>我确认只在自己的电脑保存，删除环境时会一并删除</span>
             </label>
             <button class="btn" type="button" @click="enableTotp">确认启用</button>
           </div>
@@ -213,6 +218,12 @@ async function clearTotp(): Promise<void> {
   justify-content: space-between;
   color: #374151;
   font-size: 13px;
+}
+.hint {
+  margin: 0;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .totp__setup {
   display: flex;

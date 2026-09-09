@@ -89,6 +89,12 @@ async function toggleStartup(): Promise<void> {
   pushToast('success', startupEnabled.value ? '已开启开机启动' : '已关闭开机启动')
 }
 
+function securityLabel(value: 'unknown' | 'enabled' | 'disabled'): string {
+  if (value === 'enabled') return '已开启'
+  if (value === 'disabled') return '未开启'
+  return '未确认'
+}
+
 function fmtTime(ts: number | null): string {
   if (!ts) return '从未启动'
   return new Date(ts).toLocaleString()
@@ -363,7 +369,7 @@ async function confirmBulkDelete(): Promise<void> {
                 {{
                   e.securityStatus.reVerificationRequired
                     ? '需重新验证'
-                    : `2SV：${e.securityStatus.twoStepVerification}`
+                    : `两步验证：${securityLabel(e.securityStatus.twoStepVerification)}`
                 }}
               </span>
             </td>

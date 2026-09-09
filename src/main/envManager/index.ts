@@ -36,7 +36,8 @@ import {
   toPublicBinding,
   toPublicProxy,
   type EnvChanges,
-  type EnvRecord
+  type EnvRecord,
+  type StoredProxyBinding
 } from '../db'
 import {
   alignFieldsForCountry,
@@ -225,7 +226,10 @@ function registerEnvChannels(): void {
     if (!reason) fail('VALIDATION', '请填写代理变更原因')
     const existing = getEnvDao().getEnv(input.id)
     if (!existing) fail('NOT_FOUND', `环境不存在: ${input.id}`)
-    const binding = await createVerifiedBinding(input.binding, reason)
+    const binding = await createVerifiedBinding(
+      proxyBindingWithSavedPassword(input.binding, existing.proxyBinding),
+      reason
+    )
     const conflict = getEnvDao().getEnvIdByEgressIp(binding.expectedEgressIp, input.id)
     if (conflict) fail('PROXY_IP_CONFLICT', `出口 IP 已绑定给环境 ${conflict}`)
     const updated = getEnvDao().updateEnv(input.id, { proxyBinding: binding })
@@ -310,6 +314,19 @@ function registerEnvChannels(): void {
 
   // T7 env:status：内存状态表（UI 首屏来源）
   defineIpc(IPC.envStatus, () => getStatusMap())
+}
+
+function proxyBindingWithSavedPassword(
+  input: ProxyRebindInput['binding'],
+  existing: StoredProxyBinding | null
+): ProxyRebindInput['binding'] {
+  // 密码属于环境的持久配置：用户留空时始终复用当前保存的密码。
+  // 只有明确填写新密码时才覆盖旧值，代理主机或账号变化不影响该规则。
+  if (input.config.password || !existing?.config.password) return input
+  return {
+    ...input,
+    config: { ...input.config, password: existing.config.password }
+  }
 }
 
 function securityTodoFor(status: SecurityStatus): SecurityTodo {

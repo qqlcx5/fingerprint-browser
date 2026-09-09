@@ -17,11 +17,7 @@ const form = reactive({
   password: '',
   reason: ''
 })
-const testing = ref(false)
 const busy = ref(false)
-const testResult = ref<{ ip: string; country: string; latencyMs: number } | null>(null)
-const testedKey = ref<string | null>(null)
-const testError = ref<string | null>(null)
 
 function config(): ProxyConfig {
   return {
@@ -32,39 +28,14 @@ function config(): ProxyConfig {
     ...(form.password ? { password: form.password } : {})
   }
 }
-function key(): string {
-  const cfg = config()
-  return `${form.networkClass}|${cfg.type}|${cfg.host}|${cfg.port}|${cfg.username ?? ''}|${cfg.password ?? ''}`
-}
 
-async function test(): Promise<void> {
-  const cfg = config()
-  if (!cfg.host || !cfg.port) {
+async function submit(): Promise<void> {
+  if (!form.host.trim() || !Number(form.port)) {
     pushToast('error', '请填写代理主机和端口')
     return
   }
-  testing.value = true
-  testResult.value = null
-  testedKey.value = null
-  testError.value = null
-  const res = await window.api.proxyTest(cfg)
-  testing.value = false
-  if (!res.ok) {
-    testError.value = errorText(res.error)
-    pushToast('error', testError.value)
-    return
-  }
-  testResult.value = res.data
-  testedKey.value = key()
-}
-
-async function submit(): Promise<void> {
   if (!form.reason.trim()) {
     pushToast('error', '请填写更换原因')
-    return
-  }
-  if (!testResult.value || testedKey.value !== key()) {
-    pushToast('error', '请先测试当前代理后再更换')
     return
   }
   busy.value = true
@@ -78,7 +49,7 @@ async function submit(): Promise<void> {
     pushToast('error', errorText(res.error))
     return
   }
-  pushToast('success', `代理已绑定到出口 ${res.data.proxyBinding?.expectedEgressIp ?? ''}`)
+  pushToast('success', `代理已更换为出口 ${res.data.proxyBinding?.expectedEgressIp ?? ''}`)
   emit('saved')
   emit('close')
 }
@@ -88,56 +59,54 @@ async function submit(): Promise<void> {
   <Modal
     title="更换代理"
     :busy="busy"
-    confirm-text="确认更换"
+    confirm-text="验证并更换"
     @confirm="submit"
     @cancel="emit('close')"
   >
     <div class="form">
       <p class="explain">
-        只在原代理无法使用或需要更换时操作。更换后，环境会固定使用新的出口地址。
+        只在原代理无法使用或确实要更换时操作。点击确认后系统会验证新代理，验证通过才会保存。
       </p>
       <p v-if="current" class="current">
         当前出口：{{ current.expectedEgressIp }} · {{ current.country }}
       </p>
       <div class="grid3">
-        <label class="field"
-          ><span>类型</span
-          ><select v-model="form.type">
+        <label class="field">
+          <span>类型</span>
+          <select v-model="form.type">
             <option value="socks5">SOCKS5</option>
             <option value="http">HTTP</option>
             <option value="https">HTTPS</option>
-          </select></label
-        >
-        <label class="field"
-          ><span>代理类别</span
-          ><select v-model="form.networkClass">
+          </select>
+        </label>
+        <label class="field">
+          <span>代理类别</span>
+          <select v-model="form.networkClass">
             <option value="static_residential">静态住宅</option>
             <option value="sticky_residential">粘性住宅</option>
             <option value="isp">ISP</option>
-          </select></label
-        >
+          </select>
+        </label>
         <label class="field"><span>端口</span><input v-model="form.port" type="text" /></label>
       </div>
       <div class="grid2">
         <label class="field"><span>主机</span><input v-model="form.host" type="text" /></label>
         <label class="field"><span>账号</span><input v-model="form.username" type="text" /></label>
       </div>
-      <label class="field"
-        ><span>密码</span
-        ><input v-model="form.password" type="password" placeholder="必须重新填写以验证"
-      /></label>
-      <label class="field"
-        ><span>更换原因</span
-        ><input v-model="form.reason" type="text" placeholder="如：原代理无法使用"
-      /></label>
-      <div class="test">
-        <button class="btn" type="button" :disabled="testing" @click="test">
-          {{ testing ? '测试中...' : '测试连接' }}</button
-        ><span v-if="testResult" class="ok"
-          >出口 {{ testResult.ip }} · {{ testResult.country }} · {{ testResult.latencyMs }}ms</span
-        >
-      </div>
-      <p v-if="testError" class="error">{{ testError }}</p>
+      <label class="field">
+        <span>密码</span>
+        <input
+          v-model="form.password"
+          type="password"
+          :placeholder="
+            current?.config.hasPassword ? '留空时自动保留已保存的密码' : '没有密码可留空'
+          "
+        />
+      </label>
+      <label class="field">
+        <span>更换原因</span>
+        <input v-model="form.reason" type="text" placeholder="如：原代理无法使用" />
+      </label>
     </div>
   </Modal>
 </template>
@@ -183,28 +152,5 @@ async function submit(): Promise<void> {
   border-radius: 6px;
   padding: 7px 10px;
   font-size: 13px;
-}
-.test {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.btn {
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  background: #fff;
-  padding: 6px 9px;
-  color: #374151;
-  font-size: 12px;
-  cursor: pointer;
-}
-.ok {
-  color: #15803d;
-  font-size: 12px;
-}
-.error {
-  margin: 0;
-  color: #b42318;
-  font-size: 12px;
 }
 </style>

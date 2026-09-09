@@ -101,7 +101,8 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
       if (!isLaunchCurrent(id, token)) failLaunchCancelled()
       if (needsSocks5Relay(cfg)) {
         // Chromium --proxy-server 不支持 SOCKS5 账密认证（上游限制）：
-        // 起本地 HTTP 中继，内核连中继（无认证），中继经带认证的 SOCKS5 隧道转发。
+        // 起本地无认证 SOCKS5 中继；内核走标准 SOCKS5，中继再向上游完成 RFC 1929 认证。
+        // 域名以 ATYP=3 交给上游解析，避免本地 DNS 泄漏。
         await stopRelayFor(id) // 旧启动被取消后可能遗留
         const relay = await startSocks5Relay(cfg)
         if (!isLaunchCurrent(id, token)) {
@@ -109,7 +110,7 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
           failLaunchCancelled()
         }
         relays.set(id, relay)
-        proxy = { server: `http://127.0.0.1:${relay.port}` }
+        proxy = { server: `socks5://127.0.0.1:${relay.port}` }
         getLogger().info('proxy.relay.started', {
           id,
           port: relay.port,

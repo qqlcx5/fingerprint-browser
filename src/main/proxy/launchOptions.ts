@@ -7,8 +7,8 @@
  * ⚠ 上游限制与兜底（需求文档 §6.4"含账号密码认证"）：
  * Chromium 原生 --proxy-server 对 SOCKS5 不支持用户名/密码认证，Playwright 的
  * proxy.username/password 仅对 http/https 代理生效。因此 06-launcher 对
- * "socks5 + 账密"形态不走本函数，改用 relay.ts 的本地 HTTP 中继
- * （proxy = { server: 'http://127.0.0.1:{port}' }）；本函数继续服务其余形态。
+ * "socks5 + 账密"形态不走本函数，改用 relay.ts 的本地无认证 SOCKS5 中继
+ * （proxy = { server: 'socks5://127.0.0.1:{port}' }）；本函数继续服务其余形态。
  */
 import type { ProxyConfig } from '../../shared/types'
 

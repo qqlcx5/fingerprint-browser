@@ -24,6 +24,7 @@ export async function wipeAllData(): Promise<{ wipedEnvs: number }> {
     rmSync(f, { force: true })
   }
   rmSync(join(dataRoot(), 'envs'), { recursive: true, force: true })
+  rmSync(join(dataRoot(), 'secrets'), { recursive: true, force: true })
 
   const storage = setupStorage()
   initStatuses([])

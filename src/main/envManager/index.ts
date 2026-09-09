@@ -19,7 +19,12 @@ import type {
   EnvUpdateInput,
   FingerprintUpdateInput,
   IdInput,
-  StartupNotice
+  ProxyRebindInput,
+  SecurityStatus,
+  SecurityStatusUpdateInput,
+  StartupNotice,
+  TotpCode,
+  TotpEnableInput
 } from '../../shared/types'
 import {
   createEnvWithDirs,
@@ -36,8 +41,16 @@ import {
   coreFingerprintError,
   generateCoreFingerprint
 } from '../fingerprint'
-import { testEgress, validateProxyConfig } from '../proxy'
+import { createVerifiedBinding, testEgress, validateProxyConfig } from '../proxy'
 import { getStatus, getStatusMap, launchEnv, stopEnv } from '../launcher'
+import {
+  clearTotp,
+  clearTotpRef,
+  enableTotp,
+  generateTotpCode,
+  getSecurityStatus,
+  updateSecurityStatus
+} from '../security'
 import { drainNotices, pushNotice } from './notices'
 import { wipeAllData } from './wipe'
 
@@ -101,8 +114,15 @@ function registerEnvChannels(): void {
       input.proxyConfig === undefined || input.proxyConfig === null
         ? null
         : validateProxyConfig(input.proxyConfig)
-    let country: string | null = null
-    if (proxyConfig) {
+    const proxyBinding = input.proxyBinding
+      ? await createVerifiedBinding(input.proxyBinding, '创建环境')
+      : null
+    if (proxyBinding) {
+      const conflict = dao.getEnvIdByEgressIp(proxyBinding.expectedEgressIp)
+      if (conflict) fail('PROXY_IP_CONFLICT', `出口 IP 已绑定给环境 ${conflict}`)
+    }
+    let country: string | null = proxyBinding?.country ?? null
+    if (!proxyBinding && proxyConfig) {
       try {
         country = (await testEgress(proxyConfig)).country
       } catch (e) {
@@ -124,6 +144,7 @@ function registerEnvChannels(): void {
       },
       fingerprint: generateCoreFingerprint(country),
       alignFields: alignFieldsForCountry(country),
+      proxyBinding,
       proxyConfig
     })
     return toEnv(record)
@@ -152,6 +173,41 @@ function registerEnvChannels(): void {
     if (!updated) fail('NOT_FOUND', `环境不存在: ${input.id}`)
     return toEnv(updated)
   })
+
+  defineIpc<ProxyRebindInput, Env>(IPC.envProxyRebind, async (input) => {
+    if (getStatus(input.id) !== 'idle') fail('ENV_RUNNING', '环境运行中，不能重新绑定代理')
+    const reason = input.changeReason.trim()
+    if (!reason) fail('VALIDATION', '请填写代理变更原因')
+    const existing = getEnvDao().getEnv(input.id)
+    if (!existing) fail('NOT_FOUND', `环境不存在: ${input.id}`)
+    const binding = await createVerifiedBinding(input.binding, reason)
+    const conflict = getEnvDao().getEnvIdByEgressIp(binding.expectedEgressIp, input.id)
+    if (conflict) fail('PROXY_IP_CONFLICT', `出口 IP 已绑定给环境 ${conflict}`)
+    const updated = getEnvDao().updateEnv(input.id, { proxyBinding: binding })
+    if (!updated) fail('NOT_FOUND', `环境不存在: ${input.id}`)
+    getLogger().info('envManager.proxy_rebound', {
+      id: input.id,
+      oldEgressIp: existing.proxyBinding?.expectedEgressIp ?? null,
+      newEgressIp: binding.expectedEgressIp,
+      reason
+    })
+    return toEnv(updated)
+  })
+
+  defineIpc<IdInput, SecurityStatus>(IPC.envSecurityGet, (input) => getSecurityStatus(input.id))
+  defineIpc<SecurityStatusUpdateInput, SecurityStatus>(IPC.envSecurityUpdate, (input) =>
+    updateSecurityStatus(input.id, input.status)
+  )
+  defineIpc<TotpEnableInput, { id: string }>(IPC.envTotpEnable, (input) => {
+    if (getStatus(input.id) !== 'idle') fail('ENV_RUNNING', '环境运行中，不能配置 TOTP')
+    enableTotp(input.id, input.secret)
+    return { id: input.id }
+  })
+  defineIpc<IdInput, { id: string }>(IPC.envTotpClear, (input) => {
+    clearTotp(input.id)
+    return { id: input.id }
+  })
+  defineIpc<IdInput, TotpCode>(IPC.envTotpCode, (input) => generateTotpCode(input.id))
 
   defineIpc<FingerprintUpdateInput, Env>(IPC.envUpdateFingerprint, (input) => {
     if (getStatus(input.id) !== 'idle') fail('ENV_RUNNING', '环境运行中，不能修改核心指纹')
@@ -196,6 +252,8 @@ function registerEnvChannels(): void {
   defineIpc<IdInput, { id: string }>(IPC.envDelete, (input) => {
     const st = getStatus(input.id)
     if (st !== 'idle') fail('ENV_RUNNING', `环境运行中（${st}），请先停止再删除`)
+    const record = getEnvDao().getEnv(input.id)
+    if (record?.totpSecretRef) clearTotpRef(record.totpSecretRef)
     deleteEnvWithDirs(getEnvDao(), input.id)
     return { id: input.id }
   })

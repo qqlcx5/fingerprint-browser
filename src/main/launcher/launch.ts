@@ -20,10 +20,11 @@ import {
   startSocks5Relay,
   testEgress,
   toPlaywrightProxy,
+  verifyBoundEgress,
   type PlaywrightProxyOptions,
   type Socks5Relay
 } from '../proxy'
-import { buildFingerprintLaunchOptions, diffAlignCountry, injectFingerprint } from '../fingerprint'
+import { buildFingerprintLaunchOptions, diffAlignCountry } from '../fingerprint'
 import { envDownloadsDir, envProfileDir } from '../../shared/paths'
 import { killByProfileDir } from './orphan'
 import { getStatus, setStatus } from './status'
@@ -95,9 +96,9 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
     // 2. 代理测连
     let egress: EgressInfo | null = null
     let proxy: PlaywrightProxyOptions | undefined
-    if (record.proxyConfig) {
-      const cfg = record.proxyConfig
-      egress = await testEgress(cfg)
+    if (record.proxyBinding) {
+      const cfg = record.proxyBinding.config
+      egress = await verifyBoundEgress(record.proxyBinding)
       if (!isLaunchCurrent(id, token)) failLaunchCancelled()
       if (needsSocks5Relay(cfg)) {
         // Chromium --proxy-server 不支持 SOCKS5 账密认证（上游限制）：
@@ -119,6 +120,11 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
       } else {
         proxy = toPlaywrightProxy(cfg)
       }
+    } else if (record.proxyConfig) {
+      const cfg = record.proxyConfig
+      egress = await testEgress(cfg)
+      if (!isLaunchCurrent(id, token)) failLaunchCancelled()
+      proxy = toPlaywrightProxy(cfg)
     }
 
     // 3. 国家变更检测（不阻塞启动，交给 07 确认流）
@@ -150,7 +156,7 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
       timezoneId: fp.timezoneId,
       geolocation: fp.geolocation,
       permissions: fp.permissions,
-      ignoreDefaultArgs: ['--enable-automation']
+      ignoreDefaultArgs: []
     })
     if (!isLaunchCurrent(id, token)) {
       await context.close()
@@ -161,11 +167,7 @@ export async function launchEnv(id: string): Promise<LaunchResult> {
     contexts.set(id, context)
     watchContext(id, context, () => void stopRelayFor(id))
 
-    // 6. 核心 Chrome 指纹注入（init script，后续所有页面生效）
-    await injectFingerprint(context, record.fingerprint)
-    if (!isLaunchCurrent(id, token)) failLaunchCancelled()
-
-    // 7. running + 落库最后启动时间
+    // 6. running + 落库最后启动时间
     launchTokens.delete(id)
     setStatus(id, 'running')
     dao.updateEnv(id, { lastLaunchedAt: Date.now() })

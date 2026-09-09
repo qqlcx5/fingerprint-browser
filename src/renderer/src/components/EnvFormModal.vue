@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import type { Env, ProxyConfig, ProxyType } from '@shared/types'
+import type { Env, ProxyConfig, ProxyNetworkClass, ProxyType } from '@shared/types'
 import { errorText, pushToast } from '../lib/toast'
 import Modal from './Modal.vue'
 
@@ -13,25 +13,30 @@ const form = reactive({
   name: props.env?.name ?? '',
   remark: props.env?.remark ?? '',
   group: props.env?.group ?? '',
+  site: props.env?.shop.site === 'UNKNOWN' ? '' : (props.env?.shop.site ?? ''),
+  shopIdentifier: props.env?.shop.shopIdentifier ?? '',
+  roleNote: props.env?.shop.roleNote ?? '',
   type: 'socks5' as ProxyType,
+  networkClass: 'static_residential' as ProxyNetworkClass,
   host: '',
   port: '',
   username: '',
   password: '',
   useProxy:
     !!props.env &&
-    ('proxySummary' in props.env ? !!props.env.proxySummary : !!props.env.proxyConfig)
+    ('proxySummary' in props.env ? !!props.env.proxySummary : !!props.env.proxyBinding)
 })
 
 // 编辑态仅回填非敏感代理字段。密码不会从主进程返回；留空表示保持原密码。
-if (isEdit && props.env?.proxyConfig) {
-  const p = props.env.proxyConfig
+if (isEdit && props.env?.proxyBinding) {
+  const p = props.env.proxyBinding.config
   if (p) {
     form.type = p.type
     form.host = p.host
     form.port = String(p.port)
     form.username = p.username ?? ''
     form.password = ''
+    form.networkClass = props.env.proxyBinding.networkClass
     form.useProxy = true
   }
 }
@@ -81,14 +86,21 @@ async function onSave(): Promise<void> {
     pushToast('error', '环境名称不能为空')
     return
   }
-  // 本地配置直接整体保存，编辑与创建行为一致。
-  const proxyConfig = form.useProxy ? buildProxyConfig() : null
+  // 业务环境仅通过已声明类别的代理绑定创建；编辑代理改由专用重绑定流程处理。
+  const proxyBinding = form.useProxy
+    ? { config: buildProxyConfig()!, networkClass: form.networkClass }
+    : null
   busy.value = true
   const payload = {
     name,
     remark: form.remark.trim(),
     group: form.group.trim(),
-    proxyConfig
+    shop: {
+      site: form.site.trim() || 'UNKNOWN',
+      shopIdentifier: form.shopIdentifier.trim(),
+      roleNote: form.roleNote.trim()
+    },
+    ...(isEdit ? {} : { proxyBinding })
   }
   const res =
     isEdit && props.env
@@ -126,6 +138,20 @@ async function onSave(): Promise<void> {
         <span>分组</span>
         <input v-model="form.group" type="text" placeholder="如：北美店铺" />
       </label>
+      <div class="grid2">
+        <label class="field">
+          <span>站点</span>
+          <input v-model="form.site" type="text" placeholder="如 US" />
+        </label>
+        <label class="field">
+          <span>店铺标识</span>
+          <input v-model="form.shopIdentifier" type="text" placeholder="店铺 ID 或内部编号" />
+        </label>
+      </div>
+      <label class="field">
+        <span>子账号角色备注</span>
+        <input v-model="form.roleNote" type="text" placeholder="如：主管理员、财务、客服" />
+      </label>
       <label class="field field--row">
         <input v-model="form.useProxy" type="checkbox" />
         <span>绑定代理（不绑定则直连，平台将看到本机 IP）</span>
@@ -138,6 +164,14 @@ async function onSave(): Promise<void> {
               <option value="socks5">SOCKS5</option>
               <option value="http">HTTP</option>
               <option value="https">HTTPS</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>代理类别</span>
+            <select v-model="form.networkClass">
+              <option value="static_residential">静态住宅</option>
+              <option value="sticky_residential">粘性住宅</option>
+              <option value="isp">ISP</option>
             </select>
           </label>
           <label class="field">
@@ -157,7 +191,7 @@ async function onSave(): Promise<void> {
         </div>
         <label class="field">
           <span>密码</span>
-          <input v-model="form.password" type="text" placeholder="可选" />
+          <input v-model="form.password" type="password" placeholder="可选；编辑留空不改" />
         </label>
         <div class="test">
           <button class="btn" type="button" :disabled="testing" @click="onTest">

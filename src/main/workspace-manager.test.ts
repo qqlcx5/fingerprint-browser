@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { mkdir, mkdtemp, readFile, writeFile, access } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile, access, realpath } from 'fs/promises'
 import { existsSync } from 'fs'
 import { spawnSync } from 'child_process'
 import { tmpdir } from 'os'
@@ -18,11 +18,11 @@ import { PiRpcManager } from './pi-rpc-manager'
 import { isDisposableSessionFile, MAX_LIVE_SESSION_RUNTIMES, WorkspaceManager } from './workspace-manager'
 
 async function freshDataDir(): Promise<void> {
-  configureGuiDataDir(await mkdtemp(join(tmpdir(), 'pi-ws-')))
+  configureGuiDataDir(await realpath(await mkdtemp(join(tmpdir(), 'pi-ws-'))))
 }
 
 async function project(): Promise<string> {
-  return mkdtemp(join(tmpdir(), 'pi-proj-'))
+  return realpath(await mkdtemp(join(tmpdir(), 'pi-proj-')))
 }
 
 /**

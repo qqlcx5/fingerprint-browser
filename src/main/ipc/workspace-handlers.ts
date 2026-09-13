@@ -150,8 +150,15 @@ export function registerWorkspaceHandlers(ctx: IpcContext): void {
   ipcMain.handle(IPC_CHANNELS.WORKSPACE_GET_MEMORY, async (_event, workspacePath: unknown) => {
     if (!isString(workspacePath)) throw new Error('workspacePath must be a string')
     const wsPath = assertAuthorizedWorkspacePath(workspaceManager, workspacePath)
-    const memoryFile = join(wsPath, '.pi', 'memory.json')
-    if (!isPathWithin(wsPath, memoryFile) || !existsSync(memoryFile)) {
+    const antaMemory = join(wsPath, '.anta-harness', 'memory.json')
+    const piMemory = join(wsPath, '.pi', 'memory.json')
+    const memoryFile =
+      isPathWithin(wsPath, antaMemory) && existsSync(antaMemory)
+        ? antaMemory
+        : isPathWithin(wsPath, piMemory) && existsSync(piMemory)
+          ? piMemory
+          : null
+    if (!memoryFile) {
       return { memory: { entries: [] } }
     }
     try {
@@ -190,12 +197,14 @@ export function registerWorkspaceHandlers(ctx: IpcContext): void {
       }
     })
 
+    const antaDir = join(wsPath, '.anta-harness')
     const piDir = join(wsPath, '.pi')
-    const memoryFile = join(piDir, 'memory.json')
+    const targetDir = existsSync(antaDir) || !existsSync(piDir) ? antaDir : piDir
+    const memoryFile = join(targetDir, 'memory.json')
     if (!isPathWithin(wsPath, memoryFile)) throw new Error('Target file is outside workspace')
 
-    if (!existsSync(piDir)) {
-      await mkdir(piDir, { recursive: true })
+    if (!existsSync(targetDir)) {
+      await mkdir(targetDir, { recursive: true })
     }
     await writeFile(memoryFile, JSON.stringify({ entries: sanitizedEntries }, null, 2), 'utf-8')
     return { success: true }
@@ -205,6 +214,7 @@ export function registerWorkspaceHandlers(ctx: IpcContext): void {
     if (!isString(workspacePath)) throw new Error('workspacePath must be a string')
     const wsPath = assertAuthorizedWorkspacePath(workspaceManager, workspacePath)
     const candidates = [
+      join(wsPath, '.anta-harness', 'instructions.md'),
       join(wsPath, '.pi', 'instructions.md'),
       join(wsPath, 'AGENTS.md'),
       join(wsPath, '.cursorrules'),
@@ -216,7 +226,7 @@ export function registerWorkspaceHandlers(ctx: IpcContext): void {
         return { instructions: content, sourcePath: candidate }
       }
     }
-    return { instructions: '', sourcePath: join(wsPath, '.pi', 'instructions.md') }
+    return { instructions: '', sourcePath: join(wsPath, '.anta-harness', 'instructions.md') }
   })
 
   ipcMain.handle(IPC_CHANNELS.WORKSPACE_SAVE_INSTRUCTIONS, async (_event, workspacePath: unknown, content: unknown, targetPath?: unknown) => {
@@ -232,11 +242,13 @@ export function registerWorkspaceHandlers(ctx: IpcContext): void {
         throw new Error('targetPath must be within the workspace')
       }
     } else {
+      const antaDir = join(wsPath, '.anta-harness')
       const piDir = join(wsPath, '.pi')
-      if (!existsSync(piDir)) {
-        await mkdir(piDir, { recursive: true })
+      const targetDir = existsSync(antaDir) || !existsSync(piDir) ? antaDir : piDir
+      if (!existsSync(targetDir)) {
+        await mkdir(targetDir, { recursive: true })
       }
-      destination = join(piDir, 'instructions.md')
+      destination = join(targetDir, 'instructions.md')
     }
 
     const destDir = join(destination, '..')

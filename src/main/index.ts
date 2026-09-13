@@ -109,7 +109,7 @@ async function reloadMainWindowWithGuard(ignoreCache: boolean): Promise<void> {
 }
 
 // Single-instance lock: with "minimize to tray" the window can be hidden while
-// the app keeps running, so a relaunch (taskbar, launcher, `pi-desktop <path>`)
+// the app keeps running, so a relaunch (taskbar, launcher, `anta-harness <path>`)
 // must focus the existing instance instead of spawning a second one. The second
 // process exits immediately; the first receives 'second-instance'.
 if (!app.requestSingleInstanceLock()) {
@@ -409,7 +409,7 @@ app.whenReady().then(async () => {
   workspaceManager = new WorkspaceManager()
   await workspaceManager.initialize()
 
-  // Honor PI_DESKTOP_WORKSPACE if set: switch to (or create) the named workspace.
+  // Honor ANTA_HARNESS_WORKSPACE (or legacy PI_DESKTOP_WORKSPACE) if set: switch to (or create) the named workspace.
   await applyWorkspaceFromEnv(workspaceManager)
 
   // Lock the HTML preview partition to local files before any preview can load.

@@ -22,6 +22,9 @@ export function ModelSelector({ className, compact = false }: ModelSelectorProps
   const engineLabel = useAppStore((state) => agentEngineLabel(state.piEngine) ?? DEFAULT_AGENT_ENGINE_LABEL)
   const settings = useAppStore((state) => state.settings)
 
+  const customModels = useAppStore((state) => state.customModels)
+  const loadCustomModels = useAppStore((state) => state.loadCustomModels)
+
   const [isOpen, setIsOpen] = useState(false)
   const [models, setModels] = useState<ModelInfo[]>([])
   const [loading, setLoading] = useState(false)
@@ -30,14 +33,56 @@ export function ModelSelector({ className, compact = false }: ModelSelectorProps
   const ref = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
+  const customModelList = useMemo<ModelInfo[]>(() => {
+    if (!customModels?.providers) return []
+    const list: ModelInfo[] = []
+    for (const [provider, config] of Object.entries(customModels.providers)) {
+      for (const m of config.models ?? []) {
+        list.push({
+          id: m.id,
+          name: m.name ?? m.id,
+          api: m.api ?? config.api ?? 'custom',
+          provider,
+          baseUrl: config.baseUrl ?? '',
+          reasoning: Boolean(m.reasoning),
+          input: m.input ?? ['text'],
+          contextWindow: m.contextWindow ?? 128000,
+          maxTokens: m.maxTokens ?? 4096,
+          cost: m.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        })
+      }
+    }
+    return list
+  }, [customModels])
+
+  const availableModels = useMemo(() => {
+    if (models.length > 0) return models
+    return customModelList
+  }, [models, customModelList])
+
   const currentModel = sessionState?.model
+  const selectedModelId = currentModel?.id ?? settings?.defaultModel
+  const selectedProvider = currentModel?.provider ?? settings?.defaultProvider
+
+  const matchedModel = useMemo(() => {
+    if (!selectedModelId) return null
+    return (
+      availableModels.find(
+        (m) => m.id === selectedModelId && (!selectedProvider || m.provider === selectedProvider)
+      ) ?? availableModels.find((m) => m.id === selectedModelId) ?? null
+    )
+  }, [selectedModelId, selectedProvider, availableModels])
+
   const fallbackLabel =
     currentModel?.name ??
+    matchedModel?.name ??
     (settings?.defaultModel
       ? settings.defaultProvider
         ? `${settings.defaultProvider}/${settings.defaultModel}`
         : settings.defaultModel
-      : 'Select model')
+      : availableModels.length > 0
+        ? (availableModels[0].name ?? availableModels[0].id)
+        : 'Select model')
 
   const close = (): void => {
     setIsOpen(false)
@@ -53,7 +98,7 @@ export function ModelSelector({ className, compact = false }: ModelSelectorProps
         success?: boolean
         data?: { models?: ModelInfo[] }
       } | null
-      if (response?.success && response.data?.models) {
+      if (response?.success && response.data?.models && response.data.models.length > 0) {
         setModels(response.data.models)
       } else {
         setModels([])
@@ -74,13 +119,19 @@ export function ModelSelector({ className, compact = false }: ModelSelectorProps
     setIsOpen(true)
     if (useAppStore.getState().piStatus === 'running') {
       void loadModels()
+    } else {
+      void loadCustomModels()
     }
   }
 
   useEffect(() => {
-    if (!isOpen || piStatus !== 'running') return
-    void loadModels()
-  }, [isOpen, piStatus])
+    if (!isOpen) return
+    if (piStatus === 'running') {
+      void loadModels()
+    } else {
+      void loadCustomModels()
+    }
+  }, [isOpen, piStatus, loadCustomModels])
 
   useEffect(() => {
     if (!isOpen) return
@@ -99,7 +150,7 @@ export function ModelSelector({ className, compact = false }: ModelSelectorProps
     return () => document.removeEventListener('mousedown', handleClick)
   }, [isOpen])
 
-  const filteredModels = useMemo(() => filterModels(models, query), [models, query])
+  const filteredModels = useMemo(() => filterModels(availableModels, query), [availableModels, query])
 
   const handleSelect = async (model: ModelInfo): Promise<void> => {
     if (useAppStore.getState().piStatus === 'running') {
@@ -139,7 +190,7 @@ export function ModelSelector({ className, compact = false }: ModelSelectorProps
 
       {isOpen && (
         <div className="absolute bottom-full right-0 z-50 mb-1 w-72 rounded-lg border border-border-strong bg-surface py-1 shadow-xl shadow-black/40 animate-fade-in">
-          {currentModel && (
+          {currentModel ? (
             <div className="border-b border-border px-3 py-2">
               <div className="text-xs text-muted">Current</div>
               <div className="text-sm font-medium text-primary">{currentModel.name}</div>
@@ -147,64 +198,73 @@ export function ModelSelector({ className, compact = false }: ModelSelectorProps
                 {currentModel.provider} · {currentModel.id}
               </div>
             </div>
-          )}
+          ) : settings?.defaultModel ? (
+            <div className="border-b border-border px-3 py-2">
+              <div className="text-xs text-muted">Default model</div>
+              <div className="text-sm font-medium text-primary">{matchedModel?.name ?? settings.defaultModel}</div>
+              <div className="mt-0.5 text-xs text-dim">
+                {settings.defaultProvider ?? 'default'} · {settings.defaultModel}
+              </div>
+            </div>
+          ) : null}
 
           {piStatus !== 'running' && (
-            <div className="border-b border-border px-3 py-2 text-xs text-dim">
-              Start Pi to list and change models.
+            <div className="border-b border-border px-3 py-1.5 text-[11px] text-muted">
+              Select default model for next turn
             </div>
           )}
 
-          {piStatus === 'running' && (
-            <>
-              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                <Search size={12} className="shrink-0 text-dim" />
-                <input
-                  ref={searchRef}
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search models…"
-                  className="min-w-0 flex-1 bg-transparent text-sm text-primary outline-none placeholder:text-faint"
-                />
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+            <Search size={12} className="shrink-0 text-dim" />
+            <input
+              ref={searchRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search models…"
+              className="min-w-0 flex-1 bg-transparent text-sm text-primary outline-none placeholder:text-faint"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto py-1">
+            {loading && (
+              <div className="flex items-center gap-2 px-3 py-2 text-xs text-dim">
+                <Loader2 size={12} className="animate-spin" />
+                Loading…
               </div>
-              <div className="max-h-56 overflow-y-auto py-1">
-                {loading && (
-                  <div className="flex items-center gap-2 px-3 py-2 text-xs text-dim">
-                    <Loader2 size={12} className="animate-spin" />
-                    Loading…
+            )}
+            {error && availableModels.length === 0 && (
+              <div className="px-3 py-2 text-xs text-error">{error}</div>
+            )}
+            {!loading && filteredModels.length === 0 && (
+              <div className="px-3 py-2 text-xs text-dim">No models match</div>
+            )}
+            {filteredModels.map((model) => {
+              const selected = currentModel
+                ? currentModel.id === model.id && currentModel.provider === model.provider
+                : (settings?.defaultModel === model.id &&
+                    (!settings?.defaultProvider || settings.defaultProvider === model.provider)) ||
+                  (!settings?.defaultModel && availableModels[0]?.id === model.id)
+              return (
+                <button
+                  key={`${model.provider}/${model.id}`}
+                  type="button"
+                  onClick={() => void handleSelect(model)}
+                  className={clsx(
+                    'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-hover transition-colors',
+                    selected && 'bg-card'
+                  )}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-primary">{model.name}</div>
+                    <div className="truncate text-xs text-dim">
+                      {model.provider} · {model.id}
+                    </div>
                   </div>
-                )}
-                {error && <div className="px-3 py-2 text-xs text-error">{error}</div>}
-                {!loading && !error && filteredModels.length === 0 && (
-                  <div className="px-3 py-2 text-xs text-dim">No models match</div>
-                )}
-                {filteredModels.map((model) => {
-                  const selected =
-                    currentModel?.id === model.id && currentModel?.provider === model.provider
-                  return (
-                    <button
-                      key={`${model.provider}/${model.id}`}
-                      type="button"
-                      onClick={() => void handleSelect(model)}
-                      className={clsx(
-                        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-surface-hover transition-colors',
-                        selected && 'bg-card'
-                      )}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-primary">{model.name}</div>
-                        <div className="truncate text-xs text-dim">
-                          {model.provider} · {model.id}
-                        </div>
-                      </div>
-                      {selected && <Check size={12} className="shrink-0 text-success" />}
-                    </button>
-                  )
-                })}
-              </div>
-            </>
-          )}
+                  {selected && <Check size={12} className="shrink-0 text-success" />}
+                </button>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

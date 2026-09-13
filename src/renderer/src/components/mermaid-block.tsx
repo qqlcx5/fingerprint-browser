@@ -1,8 +1,7 @@
 import { useEffect, useState, useId } from 'react'
-import { renderMermaidSvg, isClosedFencedCodeBlock } from '../lib/mermaid'
+import { renderMermaidSvg } from '../lib/mermaid'
 import { CopyButton } from './copy-button'
 import { Code2, Eye, Workflow, AlertCircle } from 'lucide-react'
-import { clsx } from 'clsx'
 
 const svgCache = new Map<string, string>()
 

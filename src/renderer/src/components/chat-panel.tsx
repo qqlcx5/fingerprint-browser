@@ -153,6 +153,12 @@ export function ChatPanel(): React.JSX.Element {
   }, [])
 
   const activeWorkspace = useAppStore((state) => state.activeWorkspace)
+
+  useEffect(() => {
+    setMemoryDialogOpen(false)
+    setInstructionsDialogOpen(false)
+  }, [activeWorkspace?.id])
+
   const showSidePanel = sidePanel !== null || previewTarget !== null
   const showFileTree = sidePanel === 'files'
   const showImage = previewTarget?.kind === 'image' && sidePanel !== 'diff'

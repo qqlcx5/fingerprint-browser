@@ -21,6 +21,7 @@ import { WorkflowNavigator } from './components/workflow-navigator'
 import { useContextMenu, buildDefaultContextMenu } from './components/context-menu'
 import { usePiEvents, useMenuActions, useInitialize, useNotePickerShortcut } from './hooks'
 import { useFolderDrop } from './hooks/use-folder-drop'
+import { ErrorBoundary } from './components/error-boundary'
 import { useAppStore } from './store'
 import { useEffect } from 'react'
 import { ArrowUpCircle, FolderOpen, PanelLeft, X } from 'lucide-react'
@@ -145,37 +146,62 @@ export function App(): React.JSX.Element {
         </button>
       )}
       <div className="flex flex-1 overflow-hidden">
-        {sidebarOpen && showChrome && <Sidebar />}
+        {sidebarOpen && showChrome && (
+          <ErrorBoundary fallback={<div className="w-64 border-r border-border p-4 text-xs text-error">Sidebar error</div>}>
+            <Sidebar />
+          </ErrorBoundary>
+        )}
 
         <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-          {showChrome && <WorkspaceTabs />}
+          {showChrome && (
+            <ErrorBoundary fallback={<div className="h-9 border-b border-border px-3 text-xs flex items-center text-dim">Tabs unavailable</div>}>
+              <WorkspaceTabs />
+            </ErrorBoundary>
+          )}
           <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
             <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-              <div className={globalWorkflowOpen ? 'hidden' : 'contents'}>
-                {currentView === 'home' && <HomeScreen />}
-                {currentView === 'mission-control' && <MissionControl />}
-                {/* Kept mounted (just hidden) so chat drafts and scroll state survive
-                    navigating to another view or opening global workflows. */}
-                <div className={currentView === 'chat' ? 'flex min-w-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
-                  <ChatPanel />
+              <ErrorBoundary
+                fallback={
+                  <div className="flex flex-1 flex-col items-center justify-center p-8 text-center text-dim">
+                    <p className="text-sm font-medium text-error">An unexpected error occurred in this view.</p>
+                    <p className="mt-1 text-xs text-muted">Try switching workspaces, sessions, or views.</p>
+                  </div>
+                }
+              >
+                <div className={globalWorkflowOpen ? 'hidden' : 'contents'}>
+                  {currentView === 'home' && <HomeScreen />}
+                  {currentView === 'mission-control' && <MissionControl />}
+                  {/* Kept mounted (just hidden) so chat drafts and scroll state survive
+                      navigating to another view or opening global workflows. */}
+                  <div className={currentView === 'chat' ? 'flex min-w-0 flex-1 flex-col overflow-hidden' : 'hidden'}>
+                    <ChatPanel />
+                  </div>
+                  {currentView === 'settings' && <SettingsPanel />}
+                  {currentView === 'sessions' && <SessionPanel />}
+                  {currentView === 'timeline' && <Timeline />}
+                  {currentView === 'packages' && <PackageBrowser />}
+                  {currentView === 'diff' && <DiffViewer />}
+                  {currentView === 'notes' && <NotesPanel />}
+                  {currentView === 'skills' && <SkillsPanel />}
+                  {currentView === 'diagnostics' && <DiagnosticsPanel />}
                 </div>
-                {currentView === 'settings' && <SettingsPanel />}
-                {currentView === 'sessions' && <SessionPanel />}
-                {currentView === 'timeline' && <Timeline />}
-                {currentView === 'packages' && <PackageBrowser />}
-                {currentView === 'diff' && <DiffViewer />}
-                {currentView === 'notes' && <NotesPanel />}
-                {currentView === 'skills' && <SkillsPanel />}
-                {currentView === 'diagnostics' && <DiagnosticsPanel />}
-              </div>
-              {globalWorkflowOpen && <WorkflowNavigator embedded />}
+                {globalWorkflowOpen && <WorkflowNavigator embedded />}
+              </ErrorBoundary>
             </main>
-            {currentView === 'chat' && !globalWorkflowOpen && <ReviewRail />}
+            {currentView === 'chat' && !globalWorkflowOpen && (
+              <ErrorBoundary fallback={null}>
+                <ReviewRail />
+              </ErrorBoundary>
+            )}
           </div>
         </div>
       </div>
 
-      {showChrome && <StatusBar />}
+      {showChrome && (
+        <ErrorBoundary fallback={<div className="h-7 border-t border-border bg-app px-3 text-xs flex items-center text-dim">Status bar unavailable</div>}>
+          <StatusBar />
+        </ErrorBoundary>
+      )}
       {showChrome && !globalWorkflowOpen && <WorkflowNavigator />}
       <ExtensionUiDialog />
       <AppConfirmDialog />

@@ -60,11 +60,13 @@ export default function antaHarnessPermissions(pi: ExtensionAPI): void {
 
   // Durable project memory bridge
   try {
-    pi.on('before_agent_start', async (event: any) => {
+    pi.on('before_agent_start', async (event: unknown) => {
       try {
         const cwd = process.cwd()
-        const memoryFile = join(cwd, '.pi', 'memory.json')
-        if (!existsSync(memoryFile)) return
+        const antaMemory = join(cwd, '.anta-harness', 'memory.json')
+        const piMemory = join(cwd, '.pi', 'memory.json')
+        const memoryFile = existsSync(antaMemory) ? antaMemory : existsSync(piMemory) ? piMemory : null
+        if (!memoryFile) return
 
         const raw = readFileSync(memoryFile, 'utf-8')
         const parsed = JSON.parse(raw)
@@ -88,8 +90,9 @@ export default function antaHarnessPermissions(pi: ExtensionAPI): void {
           notes,
         ].join('\n\n')
 
-        if (event && typeof event.systemPrompt === 'string' && !event.systemPrompt.includes('# Project Memory')) {
-          return { systemPrompt: `${event.systemPrompt}\n\n${memoryBlock}` }
+        const agentEvent = event as { systemPrompt?: string } | null | undefined
+        if (agentEvent && typeof agentEvent.systemPrompt === 'string' && !agentEvent.systemPrompt.includes('# Project Memory')) {
+          return { systemPrompt: `${agentEvent.systemPrompt}\n\n${memoryBlock}` }
         }
       } catch {
         // Suppress errors to ensure agent execution is never interrupted

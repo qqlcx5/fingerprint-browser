@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react'
 import { useAppStore, countPromptsWaitingElsewhere, formatPromptsWaiting } from '../store'
 import { agentEngineLabel } from '../../../shared/agent-engine-label'
 import { ContextUsageInspector } from './context-usage-inspector'
+import { ModelSelector } from './model-selector'
 import { clsx } from 'clsx'
 import {
   PanelLeft,
   PanelLeftClose,
   Terminal,
   DollarSign,
-  Layers,
   Minimize2,
   Settings,
   Loader2,
@@ -158,6 +158,9 @@ export function StatusBar(): React.JSX.Element {
           <WorkflowIcon size={11} />
           <span>{activeWorkflowCount > 0 ? `${activeWorkflowCount} workflow${activeWorkflowCount === 1 ? '' : 's'}` : 'workflows'}</span>
         </button>
+
+        {/* Model selector */}
+        <ModelSelector compact />
 
         {/* Token usage inspector */}
         <ContextUsageInspector />

@@ -9,7 +9,7 @@ import { applyRunOnStartup } from '../startup-launch'
 import { setTrayEnabled } from '../tray-manager'
 import { readFile, writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
-import { existsSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { isObject } from './validation'
 import { appLog } from '../app-log'
 import type { IpcContext } from './context'
@@ -23,7 +23,69 @@ export function getSettingsPath(): string {
   return getGuiDataPath(SETTINGS_FILE_NAME)
 }
 
+export function resolveEngineDefaultModel(homeDir: string): { provider: string | null; model: string | null } {
+  // 1. Check ~/.pi/agent/settings.json
+  const piSettingsPath = join(homeDir, '.pi', 'agent', 'settings.json')
+  if (existsSync(piSettingsPath)) {
+    try {
+      const data = JSON.parse(readFileSync(piSettingsPath, 'utf-8'))
+      if (typeof data.defaultModel === 'string' && data.defaultModel.trim()) {
+        return {
+          provider: typeof data.defaultProvider === 'string' ? data.defaultProvider : null,
+          model: data.defaultModel.trim(),
+        }
+      }
+    } catch {
+      // Ignore parse error
+    }
+  }
+
+  // 2. Check ~/.omp/agent/settings.json
+  const ompSettingsPath = join(homeDir, '.omp', 'agent', 'settings.json')
+  if (existsSync(ompSettingsPath)) {
+    try {
+      const data = JSON.parse(readFileSync(ompSettingsPath, 'utf-8'))
+      if (typeof data.defaultModel === 'string' && data.defaultModel.trim()) {
+        return {
+          provider: typeof data.defaultProvider === 'string' ? data.defaultProvider : null,
+          model: data.defaultModel.trim(),
+        }
+      }
+    } catch {
+      // Ignore parse error
+    }
+  }
+
+  // 3. Check ~/.pi/agent/models.json or ~/.omp/agent/models.yml
+  const piModelsPath = join(homeDir, '.pi', 'agent', 'models.json')
+  if (existsSync(piModelsPath)) {
+    try {
+      const data = JSON.parse(readFileSync(piModelsPath, 'utf-8'))
+      if (data?.providers && typeof data.providers === 'object') {
+        for (const [providerKey, providerVal] of Object.entries(data.providers)) {
+          const prov = providerVal as { models?: Array<{ id: string }> }
+          if (Array.isArray(prov.models) && prov.models.length > 0 && prov.models[0]?.id) {
+            return {
+              provider: providerKey,
+              model: prov.models[0].id,
+            }
+          }
+        }
+      }
+    } catch {
+      // Ignore parse error
+    }
+  }
+
+  return { provider: null, model: null }
+}
+
 export async function loadAppSettings(workspaceManager: WorkspaceManager): Promise<AppSettings> {
+  let settings: AppSettings = {
+    ...DEFAULT_SETTINGS,
+    defaultCwd: workspaceManager.getActiveWorkspace()?.path ?? (process.env.HOME ?? process.env.USERPROFILE ?? process.cwd()),
+  }
+
   try {
     const settingsPath = getSettingsPath()
     if (existsSync(settingsPath)) {
@@ -32,16 +94,25 @@ export async function loadAppSettings(workspaceManager: WorkspaceManager): Promi
       if (merged.piEngine !== 'auto' && merged.piEngine !== 'pi' && merged.piEngine !== 'omp') {
         merged.piEngine = 'auto'
       }
-      return merged
+      settings = merged
     }
   } catch {
     // Fall through to defaults
   }
 
-  return {
-    ...DEFAULT_SETTINGS,
-    defaultCwd: workspaceManager.getActiveWorkspace()?.path ?? (process.env.HOME ?? process.env.USERPROFILE ?? process.cwd()),
+  // Seed defaultProvider / defaultModel from engine configuration if unset in GUI
+  if (!settings.defaultModel) {
+    const home = process.env.HOME ?? process.env.USERPROFILE ?? ''
+    const fallback = resolveEngineDefaultModel(home)
+    if (fallback.model) {
+      settings.defaultModel = fallback.model
+      if (!settings.defaultProvider && fallback.provider) {
+        settings.defaultProvider = fallback.provider
+      }
+    }
   }
+
+  return settings
 }
 
 export async function saveAppSettings(settings: Partial<AppSettings>): Promise<void> {

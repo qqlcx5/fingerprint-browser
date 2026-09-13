@@ -319,7 +319,7 @@ async function withFakeEngine(
   env: Record<string, string>,
 ): Promise<void> {
   const dir = mkdtempSync(join(tmpdir(), 'pi-fake-engine-'))
-  const script = join(dir, 'fake-pi')
+  const script = join(dir, 'fake-pi.js')
   writeFileSync(script, FAKE_ENGINE_SOURCE)
   chmodSync(script, 0o755)
   setPiExecutableOverride(script, 'pi')

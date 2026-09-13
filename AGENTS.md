@@ -1,6 +1,6 @@
-# Pi Desktop
+# Anta Harness
 
-An Electron desktop application that acts as a GUI frontend for the Pi coding agent. Currently in alpha; see the Version section below.
+An Electron desktop application that acts as a GUI harness for coding agents (Pi, OMP). Currently in alpha; see the Version section below.
 
 ## Version
 
@@ -30,7 +30,7 @@ Project is currently in **Alpha**. APIs, IPC contracts, on-disk config formats, 
 - All IPC channels validated with typed contracts
 - No renderer access to Node APIs
 - Main-window navigation pinned to the packaged renderer; privileged IPC verifies the sender frame is the app renderer
-- Per-workspace trust gate: an untrusted workspace's own `.pi-desktop/permission-rules.json` allow rules are ignored, and its HTML preview runs without scripts/network, until the user trusts the workspace
+- Per-workspace trust gate: an untrusted workspace's own `.anta-harness/permission-rules.json` (or legacy `.pi-desktop/permission-rules.json`) allow rules are ignored, and its HTML preview runs without scripts/network, until the user trusts the workspace
 - Attachment reads limited to picked or in-workspace paths; session deletion confined to the Pi sessions dir; package specs validated before the Pi CLI runs
 
 ## Project Structure
@@ -356,10 +356,10 @@ Click the status icon in the sidebar header to see:
 - Run on startup, Minimize to tray on close (Windows/Linux), Resume last session, desktop notifications
 - Custom theme editor: create, edit, import/export, install from URL (theme files live in the GUI data dir `themes/`)
 - Every field (theme, permission mode, toggles, font sizes) live-previews before Save via a unified settings draft (`store.ts` `settingsDraft`); survives view switches; Save persists, Reset restores `DEFAULT_SETTINGS`
-- Permission rules: user-defined allow/deny rules (glob per Pi tool) that overlay the permission modes. Deny beats allow beats mode default; deny applies in every mode. Global rules live in `<GUI data dir>/permission-rules.json`. A workspace `.pi-desktop/permission-rules.json` is gated by workspace trust: when the workspace is trusted it fully replaces the global rules; when untrusted (the default) only its deny rules apply, layered on top of the global rules, and its allow rules are ignored (a repo can tighten, never grant). Opening a workspace whose rules file contains allow rules shows a trust prompt; the editor's Global tab notes the override and the This workspace tab carries a Trust/Revoke control. Settings → Behavior edits BOTH scopes via Global | This workspace tabs: create, edit, and remove workspace rules (in-app danger confirm), Copy from global (seeds an unsaved draft from the current global list), and per-scope JSON import/export. Manual editing of either file on disk remains fully supported — switching scope tabs re-reads that file when the scope has no unsaved draft, so hand-edited rules show up without a restart. Engine: `resources/permission-rules.ts`, shared by the Pi extension (jiti relative import, mtime-cached live re-read) and the main process. The permissions extension always loads alongside Pi when present on disk, regardless of mode or whether rules currently exist, so a rules file created mid-session is enforced immediately rather than after a restart.
-  - Trust posture: a workspace's `.pi-desktop/permission-rules.json` is repo content, so its allow rules take effect only after the user explicitly trusts the workspace (persisted in `trusted-workspaces.json`; surfaced as a trust prompt on open and a control in Settings). Until trusted, the repo can only add deny rules — it cannot suppress ask-mode prompts. Rule globs match raw tool input strings only (no path canonicalization, no command parsing), so rules are a guardrail against accidents, not a security sandbox.
+- Permission rules: user-defined allow/deny rules (glob per agent tool) that overlay the permission modes. Deny beats allow beats mode default; deny applies in every mode. Global rules live in `<GUI data dir>/permission-rules.json`. A workspace `.anta-harness/permission-rules.json` (or legacy `.pi-desktop/permission-rules.json`) is gated by workspace trust: when the workspace is trusted it fully replaces the global rules; when untrusted (the default) only its deny rules apply, layered on top of the global rules, and its allow rules are ignored (a repo can tighten, never grant). Opening a workspace whose rules file contains allow rules shows a trust prompt; the editor's Global tab notes the override and the This workspace tab carries a Trust/Revoke control. Settings → Behavior edits BOTH scopes via Global | This workspace tabs: create, edit, and remove workspace rules (in-app danger confirm), Copy from global (seeds an unsaved draft from the current global list), and per-scope JSON import/export. Manual editing of either file on disk remains fully supported — switching scope tabs re-reads that file when the scope has no unsaved draft, so hand-edited rules show up without a restart. Engine: `resources/permission-rules.ts`, shared by the agent extension (jiti relative import, mtime-cached live re-read) and the main process. The permissions extension always loads alongside the agent when present on disk, regardless of mode or whether rules currently exist, so a rules file created mid-session is enforced immediately rather than after a restart.
+  - Trust posture: a workspace's `.anta-harness/permission-rules.json` (or legacy `.pi-desktop/permission-rules.json`) is repo content, so its allow rules take effect only after the user explicitly trusts the workspace (persisted in `trusted-workspaces.json`; surfaced as a trust prompt on open and a control in Settings). Until trusted, the repo can only add deny rules — it cannot suppress ask-mode prompts. Rule globs match raw tool input strings only (no path canonicalization, no command parsing), so rules are a guardrail against accidents, not a security sandbox.
 - Custom models & providers editor — edits the active engine's models file: `~/.pi/agent/models.json` (Pi) or `~/.omp/agent/models.yml` (OMP; a not-yet-migrated `models.json` is kept until OMP migrates it). Main reports the resolved file so the editor labels always match; applied on engine restart
-- All settings persisted to `~/.pi-desktop-gui/settings.json`; defaults come from the single shared `src/shared/default-settings.ts` (used to seed the file AND for the renderer's initial/Reset values)
+- All settings persisted to `<userData>/settings.json` (legacy fallback `~/.pi-desktop-gui/settings.json`); defaults come from the single shared `src/shared/default-settings.ts` (used to seed the file AND for the renderer's initial/Reset values)
 
 ### Context Menu
 
@@ -385,22 +385,22 @@ Renderer → preload (contextBridge) → IPC → main handlers → Pi RPC / File
 
 Paths below show the legacy home-dir location for brevity; since the canonical
 data-dir migration the GUI's files live under the OS app-data dir
-(`<appData>/pi-desktop`, overridable via `PI_DESKTOP_USER_DATA_DIR`), with
+(`<appData>/anta-harness`, overridable via `ANTA_HARNESS_USER_DATA_DIR` / legacy `PI_DESKTOP_USER_DATA_DIR`), with
 `~/.pi-desktop-gui` kept as the legacy fallback.
 
 | Path | Purpose |
 |------|---------|
-| `~/.pi-desktop-gui/workspaces.json` | Workspace list and active workspace |
-| `~/.pi-desktop-gui/settings.json` | App settings |
-| `~/.pi-desktop-gui/session-tags.json` | Session tags |
-| `~/.pi-desktop-gui/trusted-workspaces.json` | Workspaces the user has trusted (enables their allow rules + interactive HTML preview) |
-| `~/.pi-desktop-gui/activity-stats.json` | Persisted per-day activity stats (aggregates only, survives session deletion) |
-| `~/.pi-desktop-gui/app-log.jsonl` | Main-process app log (warnings/errors for the Diagnostics view) |
-| `~/.pi-desktop-gui/notes.json` | Reusable prompts/notes |
-| `~/.pi-desktop-gui/archived-sessions.json` | Archived sessions |
-| `~/.pi-desktop-gui/session-auto-tags.json` | Machine-derived session tags |
-| `~/.pi-desktop-gui/permission-rules.json` | Global permission rules |
-| `~/.pi-desktop-gui/themes/` | User theme files |
+| `<userData>/workspaces.json` | Workspace list and active workspace |
+| `<userData>/settings.json` | App settings |
+| `<userData>/session-tags.json` | Session tags |
+| `<userData>/trusted-workspaces.json` | Workspaces the user has trusted (enables their allow rules + interactive HTML preview) |
+| `<userData>/activity-stats.json` | Persisted per-day activity stats (aggregates only, survives session deletion) |
+| `<userData>/app-log.jsonl` | Main-process app log (warnings/errors for the Diagnostics view) |
+| `<userData>/notes.json` | Reusable prompts/notes |
+| `<userData>/archived-sessions.json` | Archived sessions |
+| `<userData>/session-auto-tags.json` | Machine-derived session tags |
+| `<userData>/permission-rules.json` | Global permission rules |
+| `<userData>/themes/` | User theme files |
 | `~/.pi/agent/sessions/` | Pi session files (organized by cwd) |
 | `~/.omp/agent/sessions/` | OMP session files (same layout; OMP writes here regardless of flags) |
 | `~/.pi/agent/settings.json` | Pi global settings (installed `packages[]`) |
@@ -413,7 +413,7 @@ data-dir migration the GUI's files live under the OS app-data dir
 
 ## Distribution
 
-Pi Desktop is shipped as pre-built binaries — not via npm. Agents must not attempt `npm publish`.
+Anta Harness is shipped as pre-built binaries — not via npm. Agents must not attempt `npm publish`.
 
 | Platform | Format | Notes |
 |----------|--------|-------|
@@ -421,11 +421,11 @@ Pi Desktop is shipped as pre-built binaries — not via npm. Agents must not att
 | Windows | Installer (`-setup.exe`) + portable `.exe` | Community-tested |
 | macOS | `.dmg` + `.zip` (arm64) | Built via `package:mac`; unsigned/un-notarized |
 
-Artifacts are built with `electron-builder` and published to GitHub Releases. Artifact naming: `Pi-Desktop-{version}-{os}-{arch}.{ext}`.
+Artifacts are built with `electron-builder` and published to GitHub Releases. Artifact naming: `Anta-Harness-{version}-{os}-{arch}.{ext}`.
 
 Release artifacts are built per OS in GitHub Actions. Local cross-builds from Linux require Wine (Windows portable only); a local macOS build requires a Mac.
 
-Distribution is via pre-built binaries only — never `npm publish`. The `bin/pi-desktop.js` entry and `install.sh` are launch/install helpers, not an npm package surface.
+Distribution is via pre-built binaries only — never `npm publish`. The `bin/anta-harness.js` entry and `install.sh` are launch/install helpers, not an npm package surface.
 
 ## Development
 

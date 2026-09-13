@@ -1,15 +1,12 @@
-import { useState, useRef, useEffect, useCallback, useId } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../store'
 import {
-  usageTokenTotal,
-  contextOccupancyTokens,
   calculateCacheRate,
-  calculateTokenRate,
   type MessageUsage,
 } from '../lib/context-usage'
 import { clsx } from 'clsx'
-import { Minimize2, Loader2, Zap, Database, ArrowDownToLine, ArrowUpFromLine, Sparkles, Layers } from 'lucide-react'
+import { Minimize2, Loader2, Database, ArrowDownToLine, ArrowUpFromLine, Sparkles, Layers } from 'lucide-react'
 
 const RING_RADIUS = 7.5
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS
@@ -32,26 +29,6 @@ export function ContextUsageInspector(): React.JSX.Element | null {
   const [popoverPos, setPopoverPos] = useState<{ top: number; left: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
-
-  const contextUsage = sessionStats?.contextUsage
-  if (!contextUsage) return null
-
-  const contextWindow = contextUsage.contextWindow || 128_000
-  const usedTokens = contextUsage.tokens ?? 0
-  const ratio = Math.max(0, Math.min(1, usedTokens / contextWindow))
-  const percent = Math.round(ratio * 100)
-
-  // Find latest message with usage data
-  const latestMessageWithUsage = messages
-    .slice()
-    .reverse()
-    .find((m) => Boolean((m as unknown as Record<string, unknown>).usage)) as
-    | (Record<string, unknown> & { usage?: MessageUsage })
-    | undefined
-
-  const latestUsage = latestMessageWithUsage?.usage
-
-  const cacheRate = calculateCacheRate(latestUsage)
 
   // Position popover relative to trigger button
   const updatePosition = useCallback(() => {
@@ -94,6 +71,26 @@ export function ContextUsageInspector(): React.JSX.Element | null {
       }
     }
   }, [open, updatePosition])
+
+  const contextUsage = sessionStats?.contextUsage
+  if (!contextUsage) return null
+
+  const contextWindow = contextUsage.contextWindow || 128_000
+  const usedTokens = contextUsage.tokens ?? 0
+  const ratio = Math.max(0, Math.min(1, usedTokens / contextWindow))
+  const percent = Math.round(ratio * 100)
+
+  // Find latest message with usage data
+  const latestMessageWithUsage = messages
+    .slice()
+    .reverse()
+    .find((m) => Boolean((m as unknown as Record<string, unknown>).usage)) as
+    | (Record<string, unknown> & { usage?: MessageUsage })
+    | undefined
+
+  const latestUsage = latestMessageWithUsage?.usage
+
+  const cacheRate = calculateCacheRate(latestUsage)
 
   const strokeColor =
     percent >= 90 ? 'text-error' : percent >= 75 ? 'text-warning' : 'text-accent-fg'

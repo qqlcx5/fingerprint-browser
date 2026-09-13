@@ -1,5 +1,5 @@
 appId: com.electron.app
-productName: fingerprint-browser
+productName: pi-electron
 directories:
   buildResources: build
 files:
@@ -12,7 +12,7 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: fingerprint-browser
+  executableName: pi-electron
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

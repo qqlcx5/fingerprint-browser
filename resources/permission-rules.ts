@@ -1,8 +1,8 @@
 /**
- * Permission rules engine for Pi Desktop.
+ * Permission rules engine for Anta Harness.
  *
  * Single source of truth shared by:
- * - the bundled Pi extension `pi-desktop-permissions.ts` (loaded by Pi via
+ * - the bundled agent extension `anta-harness-permissions.ts` (loaded by Pi via
  *   jiti, which resolves this relative TS import at runtime), and
  * - the Electron main process (bundled by electron-vite).
  *
@@ -13,7 +13,9 @@ import { join } from 'node:path'
 
 export const PERMISSION_RULES_VERSION = 1
 export const PERMISSION_RULES_FILE_NAME = 'permission-rules.json'
-export const WORKSPACE_RULES_DIR_NAME = '.pi-desktop'
+export const CANONICAL_WORKSPACE_RULES_DIR_NAME = '.anta-harness'
+export const LEGACY_WORKSPACE_RULES_DIR_NAME = '.pi-desktop'
+export const WORKSPACE_RULES_DIR_NAME = CANONICAL_WORKSPACE_RULES_DIR_NAME
 export const ANY_TOOL = '*'
 
 export type PermissionRuleAction = 'allow' | 'deny'
@@ -191,7 +193,19 @@ export function decideToolCall(
 }
 
 export function workspaceRulesPath(cwd: string): string {
-  return join(cwd, WORKSPACE_RULES_DIR_NAME, PERMISSION_RULES_FILE_NAME)
+  const canonicalPath = join(cwd, CANONICAL_WORKSPACE_RULES_DIR_NAME, PERMISSION_RULES_FILE_NAME)
+  try {
+    if (statSync(canonicalPath).isFile()) return canonicalPath
+  } catch {
+    // canonical file not present
+  }
+  const legacyPath = join(cwd, LEGACY_WORKSPACE_RULES_DIR_NAME, PERMISSION_RULES_FILE_NAME)
+  try {
+    if (statSync(legacyPath).isFile()) return legacyPath
+  } catch {
+    // legacy file not present
+  }
+  return canonicalPath
 }
 
 export interface EffectiveRules {
@@ -236,7 +250,7 @@ function loadRulesFile(filePath: string): CachedRulesFile | null {
     entry = { mtimeMs, rules: validatePermissionRulesFile(parsed).rules }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.warn(`[pi-desktop] invalid permission rules file ${filePath}: ${message}`)
+    console.warn(`[anta-harness] invalid permission rules file ${filePath}: ${message}`)
     entry = { mtimeMs, rules: [], error: message }
   }
   rulesFileCache.set(filePath, entry)

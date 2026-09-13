@@ -136,6 +136,7 @@ function launch() {
   // Pass workspace path via environment variable
   const env = { ...process.env }
   if (workspacePath) {
+    env.ANTA_HARNESS_WORKSPACE = workspacePath
     env.PI_DESKTOP_WORKSPACE = workspacePath
   }
 

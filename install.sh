@@ -1,13 +1,13 @@
 #!/bin/bash
-# Pi Desktop — Quick Install Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/FaqFirebase/pi-desktop/master/install.sh | bash
+# Anta Harness — Quick Install Script
+# Usage: curl -fsSL https://raw.githubusercontent.com/qqlcx5/pi-electron/master/install.sh | bash
 
 set -e
 
-REPO="FaqFirebase/pi-desktop"
+REPO="qqlcx5/pi-electron"
 RELEASES_PAGE="https://github.com/$REPO/releases"
 RELEASES_API="https://api.github.com/repos/$REPO/releases"
-BINARY_NAME="pi-desktop"
+BINARY_NAME="anta-harness"
 INSTALL_DIR="${HOME}/.local/bin"
 # How many recent releases the asset lookup scans. More than one, so a release
 # whose installers are still uploading mid-CI-run does not hide the newest
@@ -20,12 +20,12 @@ print_build_from_source() {
   echo ""
   echo "Or build from source:"
   echo "  git clone https://github.com/$REPO.git"
-  echo "  cd pi-desktop"
+  echo "  cd anta-harness"
   echo "  npm install && npm run package:$1"
 }
 
 echo "╔═══════════════════════════════════════╗"
-echo "║       Pi Desktop — Installer          ║"
+echo "║       Anta Harness — Installer        ║"
 echo "╚═══════════════════════════════════════╝"
 echo ""
 
@@ -40,7 +40,7 @@ case "$OS" in
     # architecture with a published AppImage. Bail out here, before Pi is
     # installed as a side effect below, rather than after.
     if [ "$ARCH" != "x86_64" ]; then
-      echo "Error: No Pi Desktop build is published for $PLATFORM-$ARCH."
+      echo "Error: No Anta Harness build is published for $PLATFORM-$ARCH."
       echo "Prebuilt Linux installers are x86_64 only."
       print_build_from_source "$PLATFORM"
       exit 1
@@ -82,12 +82,12 @@ fi
 echo "✓ Pi found: $(which pi)"
 
 # Download the latest release artifact for this platform.
-# Pi Desktop is distributed as a packaged binary, not via npm — see MEMORY.md.
+# Anta Harness is distributed as a packaged binary, not via npm.
 if [ "$PLATFORM" = "linux" ]; then
   echo ""
   echo "Downloading AppImage..."
 
-  # Release assets are versioned (Pi-Desktop-<version>-<os>-<arch>.<ext>), so the
+  # Release assets are versioned (Anta-Harness-<version>-<os>-<arch>.<ext>), so the
   # URL must be resolved from the release's asset list. /releases/latest excludes
   # pre-releases, so fall back to the newest releases when only pre-releases
   # exist. The list endpoint returns them newest-first and the pipeline below
@@ -105,7 +105,7 @@ if [ "$PLATFORM" = "linux" ]; then
 
   DOWNLOAD_URL="$(printf '%s\n' "$RELEASE_JSON" \
     | grep -o '"browser_download_url": *"[^"]*"' \
-    | grep -- "-${PLATFORM}-${ARCH_NAME}\.AppImage\"\$" \
+    | grep -i -- "-${PLATFORM}-${ARCH_NAME}\.AppImage\"\$" \
     | head -n 1 \
     | sed 's/.*"\(https[^"]*\)".*/\1/')"
 
@@ -131,7 +131,7 @@ if [ "$PLATFORM" = "linux" ]; then
   fi
 
   echo ""
-  echo "✓ Pi Desktop installed to $OUTPUT"
+  echo "✓ Anta Harness installed to $OUTPUT"
   echo ""
   echo "Run: $OUTPUT"
   echo ""

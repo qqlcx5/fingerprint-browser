@@ -110,6 +110,10 @@ export const IPC_CHANNELS = {
   WORKSPACE_CREATE_TAB: 'workspace:create-tab',
   WORKSPACE_ACTIVITY_GET: 'workspace:activity',
   WORKSPACE_TAKE_PENDING_ACTIVATION: 'workspace:take-pending-activation',
+  WORKSPACE_GET_MEMORY: 'workspace:get-memory',
+  WORKSPACE_SAVE_MEMORY: 'workspace:save-memory',
+  WORKSPACE_GET_INSTRUCTIONS: 'workspace:get-instructions',
+  WORKSPACE_SAVE_INSTRUCTIONS: 'workspace:save-instructions',
 
   // Packages
   PACKAGE_LIST_INSTALLED: 'package:list-installed',
@@ -1194,6 +1198,56 @@ export interface Workspace {
   managed?: boolean
   /** Original task text when the app created or adopted this worktree. */
   taskPrompt?: string
+}
+
+export interface ProjectMemoryEntry {
+  id: string
+  key?: string
+  title?: string
+  content: string
+  category?: string
+  updatedAt?: number
+}
+
+export interface ProjectMemory {
+  entries: ProjectMemoryEntry[]
+}
+
+export interface WorkspaceGetMemoryRequest {
+  workspacePath: string
+}
+
+export interface WorkspaceGetMemoryResponse {
+  memory: ProjectMemory
+}
+
+export interface WorkspaceSaveMemoryRequest {
+  workspacePath: string
+  entries: ProjectMemoryEntry[]
+}
+
+export interface WorkspaceSaveMemoryResponse {
+  success: boolean
+}
+
+export interface WorkspaceGetInstructionsRequest {
+  workspacePath: string
+}
+
+export interface WorkspaceGetInstructionsResponse {
+  instructions: string
+  sourcePath: string
+}
+
+export interface WorkspaceSaveInstructionsRequest {
+  workspacePath: string
+  content: string
+  targetPath?: string
+}
+
+export interface WorkspaceSaveInstructionsResponse {
+  success: boolean
+  sourcePath: string
 }
 
 // ─── Notes Types ────────────────────────────────────────────────────────────

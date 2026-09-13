@@ -109,7 +109,7 @@ export function StreamingBubble({ content, thinking, toolCalls }: StreamingBubbl
             // streaming-md places the caret ::after the last markdown block so it
             // sits at the end of the current chunk (not on a line below it).
             <div className="markdown-body streaming-md min-w-0 text-sm break-words [overflow-wrap:anywhere]">
-              <MarkdownRenderer content={content} />
+              <MarkdownRenderer content={content} isStreaming />
             </div>
           )}
 

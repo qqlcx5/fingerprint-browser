@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Pi Desktop postinstall — runs electron-rebuild for native modules and
+ * Anta Harness postinstall — runs electron-rebuild for native modules and
  * verifies that Electron's binary was actually placed on disk.
  *
  * Steps:

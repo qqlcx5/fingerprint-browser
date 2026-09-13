@@ -128,7 +128,7 @@ export function PermissionRulesEditor({
               type="button"
               onClick={onRemoveWorkspace}
               className="flex items-center gap-1 self-start rounded-md border border-error-bg px-2 py-1 text-xs text-error transition-colors hover:bg-error-bg"
-              title="Delete this workspace's .pi-desktop/permission-rules.json; global rules apply again"
+              title="Delete this workspace's .anta-harness/permission-rules.json; global rules apply again"
             >
               <Trash2 size={12} /> Remove workspace rules
             </button>
@@ -138,7 +138,7 @@ export function PermissionRulesEditor({
 
       {workspaceOverride && scope === 'global' && (
         <p className="rounded-md border border-border-strong bg-surface px-2 py-1.5 text-xs text-dim">
-          This workspace has its own rules file (.pi-desktop/permission-rules.json). Its deny rules
+          This workspace has its own rules file (.anta-harness/permission-rules.json). Its deny rules
           apply on top of these global rules; its allow rules apply only if you trust the workspace
           — see the This workspace tab.
         </p>

@@ -477,7 +477,7 @@ export function SettingsPanel(): React.JSX.Element {
     const confirmed = await useAppStore.getState().requestConfirm({
       title: 'Remove workspace rules',
       message:
-        'Delete this workspace\'s .pi-desktop/permission-rules.json? Global permission rules will apply again.',
+        'Delete this workspace\'s .anta-harness/permission-rules.json? Global permission rules will apply again.',
       confirmLabel: 'Remove',
       danger: true,
     })

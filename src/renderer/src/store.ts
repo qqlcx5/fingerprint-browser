@@ -2361,7 +2361,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
         const trust = await get().requestConfirm({
           title: 'Trust this workspace?',
           message:
-            'This workspace defines permission rules (.pi-desktop/permission-rules.json) with allow ' +
+            'This workspace defines permission rules (.anta-harness/permission-rules.json) with allow ' +
             'rules that would let Pi skip confirmation prompts. They are ignored until you trust this ' +
             'workspace; its deny rules always apply. Only trust workspaces from a source you trust.',
           confirmLabel: 'Trust workspace',
@@ -2374,7 +2374,7 @@ export const useAppStore = create<AppState & AppActions>((set, get) => ({
         await get().requestConfirm({
           title: 'Workspace permission rules',
           message:
-            'This workspace defines its own permission rules (.pi-desktop/permission-rules.json). ' +
+            'This workspace defines its own permission rules (.anta-harness/permission-rules.json). ' +
             'Its deny rules restrict Pi while you work here; your global rules apply otherwise.',
           confirmLabel: 'OK',
           cancelLabel: 'Dismiss',

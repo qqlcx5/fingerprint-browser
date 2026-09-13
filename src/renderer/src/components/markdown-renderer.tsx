@@ -9,12 +9,18 @@ import { splitReadTruncationNote } from '../message-grouping'
 import { looksLikeFilePath, openFileFromChat } from './chat-file-link'
 import { ErrorBoundary } from './error-boundary'
 import { Code2, Eye } from 'lucide-react'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
+import { MermaidBlock } from './mermaid-block'
+import { isValidElement } from 'react'
 
 interface MarkdownRendererProps {
   content: string
+  isStreaming?: boolean
 }
 
-export function MarkdownRenderer({ content }: MarkdownRendererProps): React.JSX.Element {
+export function MarkdownRenderer({ content, isStreaming }: MarkdownRendererProps): React.JSX.Element {
   const { show, ContextMenuComponent } = useContextMenu()
 
   return (
@@ -22,7 +28,8 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps): React.JSX.
       fallback={<pre className="whitespace-pre-wrap break-words text-secondary">{content}</pre>}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
         components={{
           // Links — right-click for context menu
           a: ({ href, children, ...props }) => (
@@ -59,6 +66,12 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps): React.JSX.
               return <SvgBlock raw={codeText.replace(/\n$/, '')} />
             }
 
+            const childProps = (isValidElement(children) ? children.props : undefined) as { className?: string } | undefined
+            const lang = childProps?.className?.replace(/^.*language-/, '')?.split(/\s+/)[0]
+            if (lang === 'mermaid') {
+              return <MermaidBlock source={codeText.replace(/\n$/, '')} isStreaming={isStreaming} />
+            }
+
             return (
               <pre
                 className="relative"
@@ -86,6 +99,9 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps): React.JSX.
             if (className?.includes('language-')) {
               const lang = className.replace(/^.*language-/, '').split(/\s+/)[0]
               const raw = extractCodeText(children).replace(/\n$/, '')
+              if (lang === 'mermaid') {
+                return <MermaidBlock source={raw} isStreaming={isStreaming} />
+              }
               // Models often paste a truncated read verbatim; peel Pi's
               // "[N more lines in file…]" footer out of the fence so it renders as
               // a note rather than syntax-highlighted code. Line-numbered via the

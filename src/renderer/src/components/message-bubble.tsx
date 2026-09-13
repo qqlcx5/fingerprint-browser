@@ -112,7 +112,7 @@ function MessageBubbleImpl({
   if (message.role === 'user') {
     return (
       <>
-      <div data-scroll-anchor={message.id} onContextMenu={handleMessageContextMenu}>
+      <div data-scroll-anchor={message.id} data-minimap-id={message.id} onContextMenu={handleMessageContextMenu}>
       <UserMessage
         message={message}
         isEditing={isEditing}
@@ -135,7 +135,7 @@ function MessageBubbleImpl({
   if (message.role === 'assistant') {
     return (
       <>
-      <div onContextMenu={handleMessageContextMenu}>
+      <div data-minimap-id={message.id} onContextMenu={handleMessageContextMenu}>
       <AssistantMessage
         message={message}
         onCopy={handleCopy}

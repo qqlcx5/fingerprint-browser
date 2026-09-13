@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import {
   PERMISSION_RULES_VERSION,
   WORKSPACE_RULES_DIR_NAME,
+  LEGACY_WORKSPACE_RULES_DIR_NAME,
   validatePermissionRulesFile,
   globToRegExp,
   getPrimaryInput,
@@ -344,6 +345,21 @@ describe('loadEffectiveRules', () => {
       assert.equal(loadEffectiveRules(null, globalPath).source, 'global')
       rmSync(globalPath)
       assert.equal(loadEffectiveRules(null, globalPath).source, 'none')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('falls back to legacy .pi-desktop when .anta-harness is absent', () => {
+    const dir = makeTmpDir()
+    try {
+      const legacyDir = join(dir, LEGACY_WORKSPACE_RULES_DIR_NAME)
+      mkdirSync(legacyDir)
+      writeRules(join(legacyDir, 'permission-rules.json'), [{ action: 'allow', tool: 'read' }])
+      assert.equal(workspaceRulesPath(dir), join(legacyDir, 'permission-rules.json'))
+      const result = loadEffectiveRules(dir, null, { workspaceTrusted: true })
+      assert.equal(result.source, 'workspace')
+      assert.deepEqual(result.rules, [{ action: 'allow', tool: 'read' }])
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

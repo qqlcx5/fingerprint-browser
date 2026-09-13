@@ -6,8 +6,23 @@ import { loadAppSettings } from './settings'
 import type { WorkspaceTabOptions } from '../../shared/ipc-contracts'
 import { isWithinSessionRoots } from '../pi-paths'
 import { existsSync } from 'fs'
+import { readFile, writeFile, mkdir } from 'fs/promises'
+import { join, resolve } from 'path'
+import { isPathWithin } from '../path-authorization'
 import type { IpcContext } from './context'
 import { appLog } from '../app-log'
+
+function assertAuthorizedWorkspacePath(
+  workspaceManager: IpcContext['workspaceManager'],
+  candidatePath: string
+): string {
+  const resolved = resolve(candidatePath)
+  const matched = workspaceManager.getWorkspaces().find((w) => resolve(w.path) === resolved)
+  if (!matched) {
+    throw new Error(`Unauthorized workspace path: ${candidatePath}`)
+  }
+  return matched.path
+}
 
 function validateWorkspaceTabOptions(value: unknown): WorkspaceTabOptions {
   if (value === undefined || value === null) return {}
@@ -128,5 +143,107 @@ export function registerWorkspaceHandlers(ctx: IpcContext): void {
       )
     ).catch((error) => appLog.warn('workspaces', 'Background worktree Pi start failed', error))
     return workspace
+  })
+
+  // ─── Project Memory & Instructions ──────────────────────────────────────────
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_GET_MEMORY, async (_event, workspacePath: unknown) => {
+    if (!isString(workspacePath)) throw new Error('workspacePath must be a string')
+    const wsPath = assertAuthorizedWorkspacePath(workspaceManager, workspacePath)
+    const memoryFile = join(wsPath, '.pi', 'memory.json')
+    if (!isPathWithin(wsPath, memoryFile) || !existsSync(memoryFile)) {
+      return { memory: { entries: [] } }
+    }
+    try {
+      const raw = await readFile(memoryFile, 'utf-8')
+      const parsed = JSON.parse(raw)
+      const entries = Array.isArray(parsed?.entries) ? parsed.entries : []
+      return { memory: { entries } }
+    } catch {
+      return { memory: { entries: [] } }
+    }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_SAVE_MEMORY, async (_event, workspacePath: unknown, entries: unknown) => {
+    if (!isString(workspacePath)) throw new Error('workspacePath must be a string')
+    const wsPath = assertAuthorizedWorkspacePath(workspaceManager, workspacePath)
+    if (!Array.isArray(entries)) throw new Error('entries must be an array')
+    if (entries.length > 500) throw new Error('Too many memory entries (max 500)')
+
+    const sanitizedEntries = entries.map((raw, idx) => {
+      if (!raw || typeof raw !== 'object') throw new Error(`Entry ${idx} must be an object`)
+      const e = raw as Record<string, unknown>
+      if (!isString(e.id)) throw new Error(`Entry ${idx} id must be a string`)
+      if (e.key !== undefined && !isString(e.key)) throw new Error(`Entry ${idx} key must be a string`)
+      if (e.title !== undefined && !isString(e.title)) throw new Error(`Entry ${idx} title must be a string`)
+      if (!isString(e.content)) throw new Error(`Entry ${idx} content must be a string`)
+      if (e.content.length > 32_768) throw new Error(`Entry ${idx} content exceeds 32KB limit`)
+      if (e.category !== undefined && !isString(e.category)) throw new Error(`Entry ${idx} category must be a string`)
+      if (e.updatedAt !== undefined && typeof e.updatedAt !== 'number') throw new Error(`Entry ${idx} updatedAt must be a number`)
+      return {
+        id: e.id,
+        ...(e.key ? { key: e.key } : {}),
+        ...(e.title ? { title: e.title } : {}),
+        content: e.content,
+        ...(e.category ? { category: e.category } : {}),
+        updatedAt: typeof e.updatedAt === 'number' ? e.updatedAt : Date.now(),
+      }
+    })
+
+    const piDir = join(wsPath, '.pi')
+    const memoryFile = join(piDir, 'memory.json')
+    if (!isPathWithin(wsPath, memoryFile)) throw new Error('Target file is outside workspace')
+
+    if (!existsSync(piDir)) {
+      await mkdir(piDir, { recursive: true })
+    }
+    await writeFile(memoryFile, JSON.stringify({ entries: sanitizedEntries }, null, 2), 'utf-8')
+    return { success: true }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_GET_INSTRUCTIONS, async (_event, workspacePath: unknown) => {
+    if (!isString(workspacePath)) throw new Error('workspacePath must be a string')
+    const wsPath = assertAuthorizedWorkspacePath(workspaceManager, workspacePath)
+    const candidates = [
+      join(wsPath, '.pi', 'instructions.md'),
+      join(wsPath, 'AGENTS.md'),
+      join(wsPath, '.cursorrules'),
+      join(wsPath, '.agents', 'rules'),
+    ]
+    for (const candidate of candidates) {
+      if (isPathWithin(wsPath, candidate) && existsSync(candidate)) {
+        const content = await readFile(candidate, 'utf-8')
+        return { instructions: content, sourcePath: candidate }
+      }
+    }
+    return { instructions: '', sourcePath: join(wsPath, '.pi', 'instructions.md') }
+  })
+
+  ipcMain.handle(IPC_CHANNELS.WORKSPACE_SAVE_INSTRUCTIONS, async (_event, workspacePath: unknown, content: unknown, targetPath?: unknown) => {
+    if (!isString(workspacePath)) throw new Error('workspacePath must be a string')
+    if (!isString(content)) throw new Error('content must be a string')
+    if (content.length > 256 * 1024) throw new Error('Instructions exceed 256KB limit')
+    const wsPath = assertAuthorizedWorkspacePath(workspaceManager, workspacePath)
+
+    let destination: string
+    if (isString(targetPath) && targetPath.trim()) {
+      destination = resolve(targetPath)
+      if (!isPathWithin(wsPath, destination)) {
+        throw new Error('targetPath must be within the workspace')
+      }
+    } else {
+      const piDir = join(wsPath, '.pi')
+      if (!existsSync(piDir)) {
+        await mkdir(piDir, { recursive: true })
+      }
+      destination = join(piDir, 'instructions.md')
+    }
+
+    const destDir = join(destination, '..')
+    if (!existsSync(destDir)) {
+      await mkdir(destDir, { recursive: true })
+    }
+    await writeFile(destination, content, 'utf-8')
+    return { success: true, sourcePath: destination }
   })
 }

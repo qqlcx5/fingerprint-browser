@@ -25,17 +25,17 @@ test('linuxAutostartPath ignores a blank XDG_CONFIG_HOME', () => {
 
 test('linuxLaunchExec prefers APPIMAGE over execPath', () => {
   assert.equal(
-    linuxLaunchExec({ APPIMAGE: '/opt/Pi-Desktop.AppImage' }, '/tmp/.mount_x/pi-desktop'),
-    '/opt/Pi-Desktop.AppImage',
+    linuxLaunchExec({ APPIMAGE: '/opt/Anta-Harness.AppImage' }, '/tmp/.mount_x/anta-harness'),
+    '/opt/Anta-Harness.AppImage',
   )
 })
 
 test('linuxLaunchExec falls back to execPath when APPIMAGE is absent', () => {
-  assert.equal(linuxLaunchExec({}, '/usr/bin/pi-desktop'), '/usr/bin/pi-desktop')
+  assert.equal(linuxLaunchExec({}, '/usr/bin/anta-harness'), '/usr/bin/anta-harness')
 })
 
 test('quoteDesktopExec wraps in double quotes and escapes special chars', () => {
-  assert.equal(quoteDesktopExec('/opt/Pi Desktop/app'), '"/opt/Pi Desktop/app"')
+  assert.equal(quoteDesktopExec('/opt/Anta Harness/app'), '"/opt/Anta Harness/app"')
   assert.equal(quoteDesktopExec('/a\\b'), '"/a\\\\b"')
   assert.equal(quoteDesktopExec('/a"b'), '"/a\\"b"')
 })

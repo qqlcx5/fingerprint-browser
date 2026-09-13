@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAppStore, countPromptsWaitingElsewhere, formatPromptsWaiting } from '../store'
 import { agentEngineLabel } from '../../../shared/agent-engine-label'
+import { ContextUsageInspector } from './context-usage-inspector'
 import { clsx } from 'clsx'
 import {
   PanelLeft,
@@ -158,17 +159,8 @@ export function StatusBar(): React.JSX.Element {
           <span>{activeWorkflowCount > 0 ? `${activeWorkflowCount} workflow${activeWorkflowCount === 1 ? '' : 's'}` : 'workflows'}</span>
         </button>
 
-        {/* Token usage */}
-        {sessionStats?.contextUsage && (
-          <div className="flex items-center gap-1 text-dim" title={`Context: ${sessionStats.contextUsage.tokens?.toLocaleString() ?? '?'} / ${sessionStats.contextUsage.contextWindow.toLocaleString()} tokens`}>
-            <Layers size={10} />
-            <span>
-              {Number.isFinite(sessionStats.contextUsage.percent)
-                ? `${Math.round(sessionStats.contextUsage.percent as number)}%`
-                : '0%'}
-            </span>
-          </div>
-        )}
+        {/* Token usage inspector */}
+        <ContextUsageInspector />
 
         {/* Compact context */}
         {sessionStats?.contextUsage && (

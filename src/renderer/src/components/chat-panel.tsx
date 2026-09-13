@@ -7,6 +7,7 @@ import { MessageBubble, ToolGroupBubble } from './message-bubble'
 import { StreamingBubble } from './streaming-bubble'
 import { ChatSearch } from './chat-search'
 import { ResizeHandle } from './resize-handle'
+import { ConversationMinimap } from './conversation-minimap'
 import {
   DEFAULT_FILE_PANE_WIDTH,
   DEFAULT_SIDE_PANEL_WIDTH,
@@ -26,7 +27,7 @@ import { TerminalPanel } from './terminal'
 import { useChatScroll, useGlobalWorkflowOpen } from '../hooks'
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { clsx } from 'clsx'
-import piLogo from '../assets/pi-logo.svg'
+import antaLogo from '../assets/anta-logo.svg'
 import {
   FolderTree,
   GitCompare,
@@ -37,8 +38,12 @@ import {
   X,
   ChevronDown,
   Loader2,
+  Brain,
+  FileText,
   Workflow as WorkflowIcon,
 } from 'lucide-react'
+import { ProjectMemoryDialog } from './project-memory-dialog'
+import { ProjectInstructionsDialog } from './project-instructions-dialog'
 
 // Fallback padding when the composer has not measured yet (~idle pill + gradient).
 const DEFAULT_COMPOSER_PAD_PX = 144
@@ -84,6 +89,8 @@ export function ChatPanel(): React.JSX.Element {
   const setSidePanel = useAppStore((state) => state.setChatSidePanel)
   const [sidePanelWidth, setSidePanelWidth] = useState(DEFAULT_SIDE_PANEL_WIDTH)
   const [filePaneWidth, setFilePaneWidth] = useState(DEFAULT_FILE_PANE_WIDTH)
+  const [memoryDialogOpen, setMemoryDialogOpen] = useState(false)
+  const [instructionsDialogOpen, setInstructionsDialogOpen] = useState(false)
 
   // One shared clock for all relative-time labels — refresh every 30s so
   // "5 minutes ago" stays current without each label owning a timer.
@@ -222,6 +229,22 @@ export function ChatPanel(): React.JSX.Element {
                 }}
                 title="Workflow runs"
               />
+              {activeWorkspace && (
+                <>
+                  <ToolbarButton
+                    icon={<Brain size={14} />}
+                    active={memoryDialogOpen}
+                    onClick={() => setMemoryDialogOpen(true)}
+                    title="Project memory"
+                  />
+                  <ToolbarButton
+                    icon={<FileText size={14} />}
+                    active={instructionsDialogOpen}
+                    onClick={() => setInstructionsDialogOpen(true)}
+                    title="Project instructions"
+                  />
+                </>
+              )}
             </div>
           </div>
 
@@ -243,8 +266,8 @@ export function ChatPanel(): React.JSX.Element {
                   <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-4 py-10">
                     <div className="mb-8 text-center">
                       <img
-                        src={piLogo}
-                        alt="Pi Desktop"
+                        src={antaLogo}
+                        alt="Anta Harness"
                         className="mx-auto mb-4 block h-14 w-14"
                       />
                       <h2 className="text-2xl font-semibold text-primary">What should {engineLabel} work on?</h2>
@@ -328,6 +351,8 @@ export function ChatPanel(): React.JSX.Element {
                       </NowContext.Provider>
                     )}
                   </div>
+
+                  <ConversationMinimap scrollRef={scrollRef} messages={messages} />
 
                   {!atBottom && (
                     <button
@@ -448,6 +473,22 @@ export function ChatPanel(): React.JSX.Element {
 
       {/* File search modal */}
       <FileSearch isOpen={fileSearchOpen} onClose={toggleFileSearch} />
+
+      {/* Project Memory modal */}
+      {activeWorkspace && memoryDialogOpen && (
+        <ProjectMemoryDialog
+          workspace={activeWorkspace}
+          onClose={() => setMemoryDialogOpen(false)}
+        />
+      )}
+
+      {/* Project Instructions modal */}
+      {activeWorkspace && instructionsDialogOpen && (
+        <ProjectInstructionsDialog
+          workspace={activeWorkspace}
+          onClose={() => setInstructionsDialogOpen(false)}
+        />
+      )}
     </div>
   )
 }

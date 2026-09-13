@@ -13,9 +13,16 @@ import { DEFAULT_AGENT_ENGINE_LABEL, agentEngineLabel } from '../../shared/agent
 const READ_ONLY_TOOLS = 'read,grep,find,ls'
 const OMP_READ_ONLY_TOOLS = 'read,grep,glob'
 
-const PERMISSIONS_EXTENSION_PATH = app.isPackaged
-  ? join(process.resourcesPath, 'resources', 'pi-desktop-permissions.ts')
-  : join(app.getAppPath(), 'resources', 'pi-desktop-permissions.ts')
+function getPermissionsExtensionPath(): string | null {
+  const base = app.isPackaged
+    ? join(process.resourcesPath, 'resources')
+    : join(app.getAppPath(), 'resources')
+  const canonical = join(base, 'anta-harness-permissions.ts')
+  if (existsSync(canonical)) return canonical
+  const legacy = join(base, 'pi-desktop-permissions.ts')
+  if (existsSync(legacy)) return legacy
+  return null
+}
 
 export function getGlobalPermissionRulesPath(): string {
   return getGuiDataPath(PERMISSION_RULES_FILE_NAME)
@@ -80,28 +87,35 @@ export function applyPermissionModeToStartOptions(
     ? [...removeToolArgs(options.args ?? []), '--tools', toolList]
     : [...(options.args ?? [])]
   const globalRulesPath = getGlobalPermissionRulesPath()
-  if (existsSync(PERMISSIONS_EXTENSION_PATH)) {
-    args.push('-e', PERMISSIONS_EXTENSION_PATH)
+  const permissionsExtensionPath = getPermissionsExtensionPath()
+  if (permissionsExtensionPath) {
+    args.push('-e', permissionsExtensionPath)
   }
+
+  const workspaceTrusted = options.cwd && workspaceTrustStore.isTrusted(options.cwd) ? '1' : '0'
+  const agentLabel = agentEngineLabel(engine) ?? DEFAULT_AGENT_ENGINE_LABEL
 
   return {
     ...options,
     args,
     env: {
       ...options.env,
+      ANTA_HARNESS_PERMISSION_MODE: settings.permissionMode,
       PI_DESKTOP_PERMISSION_MODE: settings.permissionMode,
       // The extension raises the approval prompt from inside the agent, so it
       // has no other way to know which CLI it is running in. Without this the
       // prompt says "Pi wants to run..." during an OMP session.
-      PI_DESKTOP_AGENT_LABEL: agentEngineLabel(engine) ?? DEFAULT_AGENT_ENGINE_LABEL,
+      ANTA_HARNESS_AGENT_LABEL: agentLabel,
+      PI_DESKTOP_AGENT_LABEL: agentLabel,
       // Resolved here because the extension cannot re-derive the GUI data
       // dir (env override / canonical appData / legacy fallback).
+      ANTA_HARNESS_PERMISSION_RULES_PATH: globalRulesPath,
       PI_DESKTOP_PERMISSION_RULES_PATH: globalRulesPath,
       // Gates whether this workspace's own permission-rules.json allow rules
       // take effect. Untrusted repos may only tighten (deny) — the user grants
       // trust explicitly (see workspace-trust.ts).
-      PI_DESKTOP_WORKSPACE_TRUSTED:
-        options.cwd && workspaceTrustStore.isTrusted(options.cwd) ? '1' : '0',
+      ANTA_HARNESS_WORKSPACE_TRUSTED: workspaceTrusted,
+      PI_DESKTOP_WORKSPACE_TRUSTED: workspaceTrusted,
     },
   }
 }

@@ -50,7 +50,7 @@ async function checkForUpdate(): Promise<UpdateCheckResult> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), UPDATE_CHECK_TIMEOUT_MS)
     const res = await fetch(`https://api.github.com/repos/${UPDATE_REPO}/releases?per_page=10`, {
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Pi-Desktop' },
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Anta-Harness' },
       signal: controller.signal,
     })
     clearTimeout(timer)

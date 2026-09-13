@@ -6,8 +6,8 @@ import { getGuiDataPath } from './app-data-paths'
 /**
  * Workspace trust registry.
  *
- * A workspace's `.pi-desktop/permission-rules.json` can come from an untrusted
- * cloned repository. Its `allow` rules take effect only once the user trusts the
+ * A workspace's `.anta-harness/permission-rules.json` (or legacy `.pi-desktop/permission-rules.json`)
+ * can come from an untrusted cloned repository. Its `allow` rules take effect only once the user trusts the
  * workspace (see loadEffectiveRules), and the HTML file preview only runs scripts
  * for a trusted workspace. Trust is keyed by resolved absolute path and persisted
  * as a JSON array of paths in the Electron userData directory.

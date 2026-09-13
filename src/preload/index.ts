@@ -22,6 +22,8 @@ import type {
   TerminalExitEvent,
   TerminalStartOptions,
   TerminalStartResult,
+  ProjectMemory,
+  ProjectMemoryEntry,
   Note,
   NoteInput,
   NoteUpdate,
@@ -181,6 +183,10 @@ interface PiDesktopAPI {
      * window existed (macOS closed-window case). Null when there is none.
      */
     takePendingActivation(): Promise<WorkspaceActivationIntent | null>
+    getMemory(workspacePath: string): Promise<{ memory: ProjectMemory }>
+    saveMemory(workspacePath: string, entries: ProjectMemoryEntry[]): Promise<{ success: boolean }>
+    getInstructions(workspacePath: string): Promise<{ instructions: string; sourcePath: string }>
+    saveInstructions(workspacePath: string, content: string, targetPath?: string): Promise<{ success: boolean; sourcePath: string }>
   }
 
   // Package management
@@ -435,6 +441,11 @@ const api: PiDesktopAPI = {
     createTab: (options) => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_CREATE_TAB, options),
     getActivity: () => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_ACTIVITY_GET),
     takePendingActivation: () => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_TAKE_PENDING_ACTIVATION),
+    getMemory: (workspacePath) => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_GET_MEMORY, workspacePath),
+    saveMemory: (workspacePath, entries) => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_SAVE_MEMORY, workspacePath, entries),
+    getInstructions: (workspacePath) => ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_GET_INSTRUCTIONS, workspacePath),
+    saveInstructions: (workspacePath, content, targetPath) =>
+      ipcRenderer.invoke(IPC_CHANNELS.WORKSPACE_SAVE_INSTRUCTIONS, workspacePath, content, targetPath),
   },
 
   packages: {
@@ -637,7 +648,9 @@ const api: PiDesktopAPI = {
 
 // ─── Expose to Renderer ──────────────────────────────────────────────────────
 
+contextBridge.exposeInMainWorld('antaHarness', api)
 contextBridge.exposeInMainWorld('piDesktop', api)
 
 // Re-export the type for renderer usage
 export type { PiDesktopAPI }
+export type AntaHarnessAPI = PiDesktopAPI

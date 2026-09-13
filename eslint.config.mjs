@@ -1,32 +1,66 @@
-import { defineConfig } from 'eslint/config'
-import tseslint from '@electron-toolkit/eslint-config-ts'
-import eslintConfigPrettier from '@electron-toolkit/eslint-config-prettier'
-import eslintPluginReact from 'eslint-plugin-react'
-import eslintPluginReactHooks from 'eslint-plugin-react-hooks'
-import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
+import js from '@eslint/js'
+import tseslint from 'typescript-eslint'
+import reactHooks from 'eslint-plugin-react-hooks'
+import globals from 'globals'
 
-export default defineConfig(
-  { ignores: ['**/node_modules', '**/dist', '**/out'] },
-  tseslint.configs.recommended,
-  eslintPluginReact.configs.flat.recommended,
-  eslintPluginReact.configs.flat['jsx-runtime'],
+// Flat config for ESLint 10. The project is split across four TS sub-projects:
+// shared/main/preload run in Node, renderer runs in the browser with React.
+export default tseslint.config(
   {
-    settings: {
-      react: {
-        version: 'detect'
-      }
-    }
+    ignores: ['out/**', 'release/**', 'node_modules/**'],
   },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  // `_`-prefixed names are intentional "ignore this binding" markers
+  // (unused callback args, dropped destructured values).
   {
-    files: ['**/*.{ts,tsx}'],
-    plugins: {
-      'react-hooks': eslintPluginReactHooks,
-      'react-refresh': eslintPluginReactRefresh
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+  // Node-side code: main process, preload bridge, shared contracts, and the
+  // bundled Pi extension / shared permission engine under resources/ (loaded by
+  // Pi via jiti; imports only from node:*).
+  {
+    files: ['src/{main,preload,shared}/**/*.ts', 'resources/**/*.ts'],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+  },
+  // Renderer: React with browser globals + Rules of Hooks enforcement.
+  {
+    files: ['src/renderer/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    languageOptions: {
+      globals: { ...globals.browser },
+    },
+    // Keep the classic Rules of Hooks + exhaustive-deps policy. react-hooks 7's
+    // `recommended-latest` adds new opinionated rules (set-state-in-effect,
+    // static-components); adopting those is a separate, deliberate code-quality
+    // pass, not something to inherit implicitly from a version bump.
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+    },
+  },
+  // CommonJS Node scripts: CLI launcher and install hooks. `require()` is the
+  // correct module syntax here, so the TS-oriented rule is disabled.
+  {
+    files: ['bin/**/*.js', 'scripts/**/*.js'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { ...globals.node },
     },
     rules: {
-      ...eslintPluginReactHooks.configs.recommended.rules,
-      ...eslintPluginReactRefresh.configs.vite.rules
-    }
+      '@typescript-eslint/no-require-imports': 'off',
+    },
   },
-  eslintConfigPrettier
 )

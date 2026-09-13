@@ -1,49 +1,169 @@
 {
-  "name": "pi-electron",
-  "version": "1.0.0",
-  "description": "An Electron application with React and TypeScript",
-  "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "name": "anta-harness",
+  "version": "0.1.7-alpha",
+  "description": "Desktop GUI harness for coding agents",
+  "main": "out/main/index.js",
+  "desktopName": "anta-harness.desktop",
+  "author": "Anta Harness Contributors",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/qqlcx5/pi-electron",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/qqlcx5/pi-electron"
+  },
+  "keywords": [
+    "anta",
+    "harness",
+    "pi",
+    "coding-agent",
+    "ai",
+    "electron",
+    "desktop",
+    "ide"
+  ],
+  "bin": {
+    "anta-harness": "./bin/anta-harness.js"
+  },
   "scripts": {
-    "format": "prettier --write .",
-    "lint": "eslint --cache .",
-    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
-    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
-    "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "start": "electron-vite preview",
-    "dev": "electron-vite dev",
-    "build": "npm run typecheck && electron-vite build",
-    "postinstall": "electron-builder install-app-deps",
-    "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
-    "build:mac": "electron-vite build && electron-builder --mac",
-    "build:linux": "electron-vite build && electron-builder --linux"
+    "dev": "electron-vite build && electron-vite preview -- --no-sandbox",
+    "dev:hot": "electron-vite dev",
+    "start": "electron-vite preview -- --no-sandbox",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "lint": "eslint src bin scripts resources && node scripts/check-semantic-colors.mjs",
+    "package": "electron-vite build && electron-builder",
+    "package:linux": "electron-vite build && electron-builder --linux",
+    "package:linux:appimage": "electron-vite build && electron-builder --linux AppImage",
+    "package:linux:all": "electron-vite build && electron-builder --linux",
+    "package:mac": "electron-vite build && electron-builder --mac",
+    "package:mac:dmg": "electron-vite build && electron-builder --mac dmg",
+    "package:mac:zip": "electron-vite build && electron-builder --mac zip",
+    "package:win": "electron-vite build && electron-builder --win",
+    "package:win:nsis": "electron-vite build && electron-builder --win nsis",
+    "package:win:portable": "electron-vite build && electron-builder --win portable",
+    "package:all": "electron-vite build && electron-builder --linux --mac --win",
+    "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
-    "@electron-toolkit/preload": "^3.0.2",
-    "@electron-toolkit/utils": "^4.0.0",
-    "electron-updater": "^6.3.9"
+    "@codemirror/lang-cpp": "^6.0.3",
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-go": "^6.0.1",
+    "@codemirror/lang-html": "^6.4.11",
+    "@codemirror/lang-java": "^6.0.2",
+    "@codemirror/lang-javascript": "^6.2.5",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/lang-markdown": "^6.5.0",
+    "@codemirror/lang-php": "^6.0.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/lang-rust": "^6.0.2",
+    "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/lang-xml": "^6.1.0",
+    "@codemirror/lang-yaml": "^6.1.3",
+    "@codemirror/language": "^6.12.3",
+    "@codemirror/legacy-modes": "^6.5.3",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@lezer/highlight": "^1.2.3",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/addon-web-links": "^0.11.0",
+    "@xterm/xterm": "^5.5.0",
+    "chokidar": "^5.0.0",
+    "clsx": "^2.1.1",
+    "codemirror": "^6.0.2",
+    "lucide-react": "^0.511.0",
+    "node-pty": "^1.1.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
+    "style-mod": "^4.1.3",
+    "yaml": "^2.9.0",
+    "zustand": "^5.0.5"
   },
   "devDependencies": {
-    "@electron-toolkit/eslint-config-prettier": "^3.0.0",
-    "@electron-toolkit/eslint-config-ts": "^3.1.0",
-    "@electron-toolkit/tsconfig": "^2.0.0",
-    "@types/node": "^22.19.1",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.1.1",
-    "electron": "^39.2.6",
+    "@eslint/js": "^10.0.1",
+    "@iconify-json/lucide": "1.2.129",
+    "@iconify/tailwind4": "1.2.3",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "^4.5.2",
+    "electron": "^43.0.0",
     "electron-builder": "^26.0.12",
-    "electron-vite": "^5.0.0",
-    "eslint": "^9.39.1",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.4.24",
-    "prettier": "^3.7.4",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1",
-    "typescript": "^5.9.3",
-    "vite": "^7.2.6"
+    "electron-vite": "^3.1.0",
+    "eslint": "^10.6.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
+    "tailwindcss": "4.3.3",
+    "tsx": "^4.23.8",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.0",
+    "vite": "^6.3.5"
+  },
+  "build": {
+    "appId": "dev.anta.harness",
+    "productName": "Anta Harness",
+    "copyright": "Copyright 2026 Anta Harness Contributors. Licensed under the Apache License, Version 2.0.",
+    "files": [
+      "out/**/*",
+      "bin/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/",
+        "to": "resources/",
+        "filter": [
+          "**/*",
+          "!**/*.test.ts"
+        ]
+      }
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "syncDesktopName": true,
+      "category": "Development",
+      "icon": "resources/icons",
+      "synopsis": "Desktop GUI harness for coding agents",
+      "description": "An Electron desktop application that provides a GUI harness for coding agents.",
+      "maintainer": "Anta Harness Contributors",
+      "artifactName": "Anta-Harness-${version}-${os}-${arch}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "resources/icons/icon.icns",
+      "darkModeSupport": true,
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "artifactName": "Anta-Harness-${version}-${os}-${arch}.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "resources/icons/icon.ico",
+      "artifactName": "Anta-Harness-${version}-${os}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Anta Harness",
+      "installerIcon": "resources/icons/icon.ico",
+      "uninstallerIcon": "resources/icons/icon.ico",
+      "artifactName": "Anta-Harness-${version}-${os}-${arch}-setup.${ext}"
+    }
   }
 }

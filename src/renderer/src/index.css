@@ -1,0 +1,386 @@
+@import "tailwindcss";
+
+/* Iconify dynamic icon selectors — same on-demand model as unocss preset-icons.
+   Write the icon class literally in JSX (e.g. `icon-[lucide--house]`) and Tailwind
+   hands that class to the plugin, which inlines only the icons it saw. Icons that
+   are never written in source cost nothing in the bundle. Icon data comes from the
+   installed `@iconify-json/lucide` set. Sizing/color follow the text: 1em tall,
+   `currentColor`, so `size-4`/`text-muted` style it like any other utility. */
+@plugin "@iconify/tailwind4";
+
+/* Vendored OpenMoji COLRv1 color emoji font — sharp vector emoji that read well
+   on dark backgrounds. Used as the emoji fallback across chat, code, and diff. */
+@font-face {
+  font-family: 'OpenMoji Color';
+  src: url('./assets/openmoji-color.woff2') format('woff2');
+  font-display: swap;
+}
+
+/* Tailwind v4 gates the `hover:` variant behind `@media (hover: hover)`. The
+   Electron/Chromium renderer reports `(hover: hover): false`, which silently
+   disables every `hover:` utility app-wide. Redefine the variant to fire on a
+   plain `:hover` so hover states work in the desktop window as intended. */
+@custom-variant hover (&:hover);
+
+@theme {
+  /* Semantic tokens — pi-theme/v1. Values here are the base dark defaults;
+     the ThemeEngine overrides them on <html> at runtime. */
+  --color-app: #0a0a0a;
+  --color-surface: #171717;
+  --color-surface-hover: #262626;
+  --color-card: #262626;
+  --color-elevated: #404040;
+  --color-highlight: #171717;
+  --color-highlight-strong: #262626;
+  --color-primary: #f5f5f5;
+  --color-secondary: #d4d4d4;
+  --color-muted: #a3a3a3;
+  --color-dim: #737373;
+  --color-faint: #525252;
+  --color-ghost: #404040;
+  --color-inverse: #0a0a0a;
+  --color-border: #262626;
+  --color-border-strong: #404040;
+  --color-border-strong-hover: #525252;
+  --color-focus: #3b82f6;
+  --color-accent: #2563eb;
+  --color-accent-hover: #1d4ed8;
+  --color-accent-fg: #60a5fa;
+  --color-accent-bg: rgba(30, 58, 138, 0.3);
+  --color-success: #34d399;
+  --color-success-bg: rgba(6, 78, 59, 0.3);
+  --color-warning: #facc15;
+  --color-warning-bg: rgba(113, 63, 18, 0.3);
+  --color-error: #f87171;
+  --color-error-hover: #ef4444;
+  --color-error-bg: rgba(127, 29, 29, 0.3);
+  --color-info: #60a5fa;
+  --color-info-bg: rgba(30, 58, 138, 0.3);
+  --color-special: #c084fc;
+  --color-special-bg: rgba(88, 28, 135, 0.3);
+  --color-chat-column: var(--color-app);
+  --color-chat-column-border: var(--color-border);
+  --color-scrollbar: #2a2a2a;
+  --color-scrollbar-hover: #3a3a3a;
+  --color-md-code: #60a5fa;
+  --color-md-pre-bg: #0d1117;
+}
+
+/* ─── Scrollbars ─────────────────────────────────────────────────────────── */
+/* Structural rules only; colors come from the token vars the engine writes. */
+
+@layer base {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-scrollbar) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--color-scrollbar);
+    border-radius: 3px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-scrollbar-hover);
+  }
+}
+
+/* ─── Markdown Rendering ─────────────────────────────────────────────────── */
+
+@layer components {
+  /* Bundled Inter for chat text (prompts + model responses). Sizes stay in rem
+     so they keep scaling with the UI font-size setting. Monospace code/pre
+     inside markdown is re-overridden below. */
+  .font-chat {
+    font-family: 'Inter Variable', 'OpenMoji Color', system-ui, sans-serif;
+  }
+
+  /* Bundled JetBrains Mono for command bodies and tool results. */
+  .font-jetbrains {
+    font-family: 'JetBrains Mono Variable', 'JetBrains Mono', 'OpenMoji Color', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  }
+
+  /* Chat center column: themable via tokens; defaults track the app background
+     so only themes that override --color-chat-column look different. */
+  .chat-center {
+    background-color: var(--color-chat-column);
+  }
+  .chat-center > .border-b { border-bottom-color: var(--color-chat-column-border); }
+  .chat-center > .border-t { border-top-color: var(--color-chat-column-border); }
+
+  /* Native Chromium select popups otherwise fall back to the OS light palette
+     even when the app has a dark theme. Keep the popup and its text on the
+     same semantic tokens as the rest of the launcher. */
+  select[data-themed-select] {
+    color-scheme: dark;
+  }
+  html.light select[data-themed-select] {
+    color-scheme: light;
+  }
+  select[data-themed-select] option {
+    background-color: var(--color-surface);
+    color: var(--color-primary);
+  }
+
+  /* Reveal the thinking copy button on hover. Plain CSS avoids the nested-group
+     ambiguity with the message-level `group` (Tailwind group-hover didn't fire). */
+  .thinking-copy-btn {
+    opacity: 0;
+    transition: opacity 150ms ease;
+  }
+  .thinking-hover:hover .thinking-copy-btn,
+  .thinking-copy-btn:focus-visible {
+    opacity: 1;
+  }
+
+  .markdown-body {
+    font-family: 'Inter Variable', 'OpenMoji Color', system-ui, sans-serif;
+    font-size: 0.9375rem;
+    line-height: 1.6;
+    color: var(--color-primary);
+  }
+
+  .markdown-body p {
+    margin-bottom: 0.75em;
+  }
+
+  .markdown-body p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* Live stream caret: attach to the last block so it tracks the end of the
+     current chunk instead of rendering as a sibling one line below. */
+  .markdown-body.streaming-md > *:last-child::after {
+    content: '';
+    display: inline-block;
+    width: 0.375rem;
+    height: 1em;
+    margin-left: 0.125rem;
+    vertical-align: text-bottom;
+    background: var(--color-accent);
+    border-radius: 1px;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3,
+  .markdown-body h4,
+  .markdown-body h5,
+  .markdown-body h6 {
+    font-size: 1em;
+    font-weight: 600;
+    margin-top: 1.25em;
+    margin-bottom: 0.5em;
+    color: var(--color-primary);
+  }
+
+  .markdown-body code {
+    font-family: 'Inter Variable', system-ui, sans-serif;
+    font-size: 1em;
+    color: var(--color-md-code);
+  }
+
+  /* Clickable filename references: arrow cursor + highlight box on hover. */
+  .markdown-body code.chat-file-link {
+    cursor: default;
+    padding: 0.05em 0.3em;
+    border-radius: 4px;
+    transition: background-color 150ms ease;
+  }
+
+  .markdown-body code.chat-file-link:hover {
+    background-color: color-mix(in oklab, var(--color-primary), transparent 90%);
+  }
+
+  .markdown-body pre {
+    margin: 0.75em 0;
+    border-radius: 8px;
+    overflow-x: auto;
+    background: var(--color-md-pre-bg);
+    border: 1px solid var(--color-border);
+  }
+
+  .markdown-body pre code {
+    display: block;
+    padding: 0.875em 1em;
+    background: transparent;
+    color: var(--color-primary);
+    font-family: 'JetBrains Mono Variable', 'JetBrains Mono', 'OpenMoji Color', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.75rem;
+    line-height: 1.6;
+  }
+
+  .markdown-body ul,
+  .markdown-body ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+  }
+
+  .markdown-body li {
+    margin-bottom: 0.25em;
+  }
+
+  .markdown-body blockquote {
+    border-left: 3px solid var(--color-border);
+    padding-left: 1em;
+    margin: 0.75em 0;
+    color: var(--color-secondary);
+  }
+
+  .markdown-body a {
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  .markdown-body a:hover {
+    text-decoration: underline;
+  }
+
+  .markdown-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.75em 0;
+    font-size: inherit;
+    line-height: 1.4;
+  }
+
+  .markdown-body th,
+  .markdown-body td {
+    padding: 0.25em 0.5em;
+    border: 1px solid var(--color-border);
+    text-align: left;
+  }
+
+  .markdown-body th {
+    background: var(--color-card);
+    font-weight: 600;
+  }
+
+  .markdown-body hr {
+    margin: 1.5em 0;
+    border: none;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .markdown-body img {
+    max-width: 100%;
+    border-radius: 8px;
+  }
+
+  .markdown-body strong {
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+}
+
+/* ─── Syntax Highlighting (GitHub Dark) ──────────────────────────────────── */
+
+@layer components {
+  .hljs {
+    background: transparent;
+    color: var(--cm-variable);
+  }
+
+  .hljs-comment,
+  .hljs-quote {
+    color: var(--cm-comment);
+    font-style: italic;
+  }
+
+  .hljs-keyword,
+  .hljs-selector-tag {
+    color: var(--cm-keyword);
+  }
+
+  .hljs-string,
+  .hljs-attr,
+  .hljs-template-variable {
+    color: var(--cm-string);
+  }
+
+  .hljs-number,
+  .hljs-literal,
+  .hljs-variable {
+    color: var(--cm-number);
+  }
+
+  .hljs-built_in,
+  .hljs-type {
+    color: var(--cm-type);
+  }
+
+  .hljs-function .hljs-title,
+  .hljs-title.function_ {
+    color: var(--cm-function);
+  }
+
+  .hljs-tag,
+  .hljs-name {
+    color: var(--cm-tag);
+  }
+
+  .hljs-attribute {
+    color: var(--cm-property);
+  }
+
+  .hljs-symbol,
+  .hljs-bullet {
+    color: var(--cm-constant);
+  }
+
+  .hljs-meta {
+    color: var(--cm-meta);
+  }
+
+  .hljs-deletion {
+    color: var(--cm-invalid);
+    background: var(--color-error-bg);
+  }
+
+  .hljs-addition {
+    color: var(--cm-string);
+    background: var(--color-success-bg);
+  }
+}
+
+/* ─── Animations ─────────────────────────────────────────────────────────── */
+
+@layer utilities {
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  .animate-pulse-dot {
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.2s ease-out;
+  }
+
+  @keyframes fleet-shimmer {
+    0% { transform: translateX(-120%); }
+    100% { transform: translateX(320%); }
+  }
+}
+
+/* In-conversation search highlights (the ::highlight() rules for the CSS Custom
+   Highlight API) are injected at runtime from chat-search.tsx — Tailwind's
+   Lightning CSS transformer drops the unrecognized ::highlight() pseudo-element
+   at build time, so they can't live here. */
